@@ -63,7 +63,7 @@ class AwentaFan(AwentaEntity, FanEntity):
             self.mac,
             {
                 "act": "send_gear_number",
-                "gear_nr": gear,
+                "level": gear,
             },
         )
 
@@ -72,7 +72,21 @@ class AwentaFan(AwentaEntity, FanEntity):
         await self.api.send(
             self.mac,
             {
-                "act": "send_gear_number",
-                "gear_nr": 0,
+                "act": "send_power_off",
             },
         )
+
+    async def async_turn_on(self, percentage=None, **kwargs):
+        if percentage is None:
+            if getattr(self, "_last_percentage", None):
+                await self.async_set_percentage(self._last_percentage)
+                return
+            await self.api.send(
+                self.mac,
+                {
+                    "act": "send_power_on",
+                },
+            )
+            return
+
+        await self.async_set_percentage(percentage)
