@@ -14,7 +14,6 @@ import argparse
 import json
 import os
 import sys
-from urllib.parse import urlencode
 
 import aiohttp
 import websockets
@@ -99,6 +98,14 @@ async def websocket_loop(key, device, mac):
             await asyncio.sleep(0.1)
 
 
+async def websocket_send(ws, payload):
+    if "id" not in payload:
+        payload.setdefault("id", 1)
+    text = json.dumps(payload)
+    print("SEND:", text)
+    await ws.send(text)
+
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--list", action="store_true")
@@ -106,7 +113,10 @@ async def main():
     parser.add_argument("--user")
     parser.add_argument("--password")
     parser.add_argument("--mac")
-    parser.add_argument("--raw", help="send a single raw json payload and exit")
+    parser.add_argument("--action", choices=["raw"], help="Immediate websocket action")
+    parser.add_argument("--payload", help="Raw JSON payload string for action")
+    parser.add_argument("--duration", type=int, default=0, help="Seconds to keep websocket open after sending payload")
+    parser.add_argument("--raw", help="Send a single raw json payload and exit (alias for --action raw)")
     args = parser.parse_args()
 
     creds = {}
@@ -136,15 +146,26 @@ async def main():
                 devices = await list_devices(session, key)
                 print(json.dumps(devices, indent=2, ensure_ascii=False))
 
-        if args.raw:
+        action = args.action or ("raw" if args.raw else None)
+        payload_text = args.payload or args.raw
+
+        if action == "raw":
+            if not payload_text:
+                parser.error("--action raw requires --payload or --raw")
             if not key:
                 print("Warning: sending raw without key attached")
-            payload = json.loads(args.raw)
+            payload = json.loads(payload_text)
             if "key" not in payload and key:
                 payload["key"] = key
             if "mac" not in payload and mac:
                 payload["mac"] = mac
-            print("Would send:", json.dumps(payload))
+            print("Action raw payload:", json.dumps(payload, ensure_ascii=False))
+            async with websockets.connect(WS_URL, ssl=True) as ws:
+                await websocket_send(ws, payload)
+                if args.duration and args.duration > 0:
+                    print(f"Keeping websocket open for {args.duration} seconds...")
+                    await asyncio.sleep(args.duration)
+            return
 
         if args.ws:
             if not key:
