@@ -31,13 +31,15 @@ class AwentaFan(AwentaEntity, FanEntity):
         self._attr_name = name
         self._attr_unique_id = f"{mac}_fan"
         self._attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
+        self._last_percentage = None
         self._attr_speed_count = 3
 
     @property
     def is_on(self):
 
         data = self.coordinator.data.get(self.mac, {})
-        return data.get("recuperation_gear_adv", 0) > 0
+        # Zgodnie z WEBSOCKET_API.md status on/off to pole "power"
+        return data.get("power", False)
 
     @property
     def percentage(self):
@@ -77,7 +79,7 @@ class AwentaFan(AwentaEntity, FanEntity):
             },
         )
 
-    async def async_turn_on(self, percentage=None, preset_mode=None, **kwargs):
+    async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs):
         if percentage is None:
             # If no percentage is given, try to restore last known percentage
             # or just send a generic power on command.
