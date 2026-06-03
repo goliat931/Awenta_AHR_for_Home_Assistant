@@ -3,6 +3,8 @@ import websockets
 import json
 import logging
 import aiohttp
+import hashlib
+import urllib.parse
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -41,71 +43,91 @@ class AwentaAPI:
             )
 
     async def login(self):
-        """Logowanie do API. Używamy parametrów identycznych jak w działającym skrypcie."""
-        headers = {
-            "source": "android",
-            "User-Agent": "okhttp/4.9.1"
-        }
+
+        sha1_pass = hashlib.sha1(
+            self.password.encode("iso-8859-1")
+        ).hexdigest()
+
+        # params musi być stringiem JSON wg quick_test.py
+        params_str = json.dumps(
+            {"model": "Samsung Galaxy (Android 12 S)"},
+            separators=(",", ":")
+        )
 
         payload = {
             "action": "version",
             "authorization": {
                 "email": self.email,
-                "pass": self.password,
+                "pass": sha1_pass,
                 "lang": "pl",
             },
-            "params": {
-                "model": "Samsung Galaxy (Android 12 S)",
-                "version": "2025_10_04"
-            },
+            "params": params_str,
+        }
+
+        json_payload = json.dumps(payload, separators=(",", ":"))
+        body = f"data={urllib.parse.quote_plus(json_payload)}"
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
         }
 
         session = async_get_clientsession(self.hass)
-        async with session.post(API_URL, json=payload, headers=headers) as resp:
+        async with session.post(
+            API_URL,
+            data=body,
+            headers=headers,
+        ) as resp:
             result = await resp.text()
             _LOGGER.debug("Login response: %s", result)
 
         j = json.loads(result)
         if not j.get("success"):
-            _LOGGER.error("Błąd logowania Awenta: %s", j.get("msg", "Nieznany błąd"))
             raise Exception(f"Login failed: {j.get('msg')}")
 
         params = j.get("params", {})
-
-        self.id_socket = params.get("id_socket") or params.get("id") or j.get("id") or 1
-        self.key_socket = params.get("key_socket") or params.get("key") or j.get("key")
+        # Mapowanie kluczy z odpowiedzi 'version'
+        self.id_socket = params.get("id") or params.get("id_socket") or 1
+        self.key_socket = params.get("key")
 
         if not self.key_socket:
-            _LOGGER.error("Zalogowano, ale nie otrzymano klucza WebSocket")
             raise Exception("No socket key received")
 
     async def list_devices(self):
 
+        sha1_pass = hashlib.sha1(
+            self.password.encode("iso-8859-1")
+        ).hexdigest()
+
         payload = {
-            "action": "getListDevices",
+            "action": "list_devices", # Zmieniono na "list_devices" zgodnie z quick_test.py
             "authorization": {
                 "email": self.email,
-                "pass": self.password,
+                "pass": sha1_pass,
                 "lang": "pl",
             },
+            "params": "{}" # Dodano pusty string JSON dla params, zgodnie z quick_test.py
         }
 
-        headers = {"User-Agent": "okhttp/4.9.1"}
-        session = async_get_clientsession(self.hass)
+        json_payload = json.dumps(payload, separators=(",", ":"))
+        body = f"data={urllib.parse.quote_plus(json_payload)}"
 
-        async with session.post(API_URL, json=payload, headers=headers) as resp:
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
+        }
+
+        session = async_get_clientsession(self.hass)
+        async with session.post(
+            API_URL,
+            data=body,
+            headers=headers,
+        ) as resp:
             result = await resp.text()
-            _LOGGER.debug("List devices response: %s", result)
+            _LOGGER.debug("list_devices response: %s", result)
 
         j = json.loads(result)
-
-        if not j.get("success") and "devices" not in j and "params" not in j:
-            _LOGGER.error("Błąd pobierania listy urządzeń: %s", j.get("msg"))
-            raise Exception("Failed to list devices")
-
-        # Sprawdzamy oba możliwe klucze, gdzie mogą być urządzenia
         self.devices = j.get("devices") or j.get("params") or []
-        _LOGGER.info("Znaleziono %d urządzeń Awenta", len(self.devices))
 
     async def websocket_loop(self, mac):
 
@@ -114,7 +136,7 @@ class AwentaAPI:
                 ws = await websockets.connect(
                     WS_URL,
                     ssl=True,
-                    extra_headers={"source": "android"},
+                    additional_headers={"source": "android"},
                 )
 
                 self.ws[mac] = ws

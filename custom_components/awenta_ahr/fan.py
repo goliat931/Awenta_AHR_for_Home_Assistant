@@ -31,22 +31,26 @@ class AwentaFan(AwentaEntity, FanEntity):
         self._attr_name = name
         self._attr_unique_id = f"{mac}_fan"
         self._attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
-        self._last_percentage = None
+        self._last_percentage = None # Initialize _last_percentage
         self._attr_speed_count = 3
 
     @property
     def is_on(self):
-
-        data = self.coordinator.data.get(self.mac, {})
-        # Zgodnie z dokumentacją status zasilania to pole "power"
-        return data.get("power", False)
+        """Return true if fan is on."""
+        data = self.coordinator.data.get(self.mac)
+        if data is None:
+            return None
+        # Zgodnie z WEBSOCKET_API.md status zasilania to pole "power"
+        return data.get("power")
 
     @property
     def percentage(self):
+        """Return the current speed percentage."""
+        data = self.coordinator.data.get(self.mac)
+        if data is None:
+            return None
 
-        gear = self.coordinator.data.get(self.mac, {}).get(
-            "recuperation_gear_adv", 0
-        )
+        gear = data.get("recuperation_gear_adv", 0)
 
         if gear == 0:
             return 0
@@ -66,7 +70,7 @@ class AwentaFan(AwentaEntity, FanEntity):
             self.mac,
             {
                 "act": "send_gear_number",
-                "level": gear,
+                "gear_nr": gear,
             },
         )
 
@@ -79,12 +83,11 @@ class AwentaFan(AwentaEntity, FanEntity):
             },
         )
 
-    async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs) -> None:
-        """Włącz wentylator."""
+    async def async_turn_on(self, percentage=None, preset_mode=None, **kwargs):
         if percentage is None:
             # If no percentage is given, try to restore last known percentage
             # or just send a generic power on command.
-            if getattr(self, "_last_percentage", None):
+            if self._last_percentage is not None:
                 await self.async_set_percentage(self._last_percentage)
                 return
             await self.api.send(

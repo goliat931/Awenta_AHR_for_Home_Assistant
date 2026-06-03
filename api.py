@@ -74,7 +74,7 @@ class AwentaAPI:
         
         while True:
             try:
-                async with websockets.connect(self.ws_url, extra_headers=headers) as websocket:
+                async with websockets.connect(self.ws_url, additional_headers=headers) as websocket:
                     self._ws = websocket
                     _LOGGER.info("Połączono z WebSocket Awenta")
                     
