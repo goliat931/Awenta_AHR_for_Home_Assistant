@@ -25,6 +25,8 @@ async def async_setup_entry(hass, entry):
         "coordinator": coordinator,
     }
 
+    await coordinator.async_wait_for_initial_data()
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True

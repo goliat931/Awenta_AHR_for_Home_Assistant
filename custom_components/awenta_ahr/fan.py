@@ -77,7 +77,7 @@ class AwentaFan(AwentaEntity, FanEntity):
             },
         )
 
-    async def async_turn_on(self, percentage=None, **kwargs):
+    async def async_turn_on(self, percentage=None, preset_mode=None, **kwargs):
         if percentage is None:
             # If no percentage is given, try to restore last known percentage
             # or just send a generic power on command.

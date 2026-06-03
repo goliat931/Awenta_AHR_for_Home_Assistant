@@ -23,6 +23,7 @@ class AwentaAPI:
         self.devices = []
         self.listeners = []
         self.ws = {}
+        self._data_futures = {} # To signal when initial data is received for a MAC
 
     def register_listener(self, callback):
         self.listeners.append(callback)
@@ -118,6 +119,10 @@ class AwentaAPI:
 
                     msg = await ws.recv()
                     data = json.loads(msg)
+
+                    # Resolve the future for initial data if it exists
+                    if mac in self._data_futures and not self._data_futures[mac].done():
+                        self._data_futures[mac].set_result(data)
 
                     for callback in self.listeners:
                         callback(mac, data)
