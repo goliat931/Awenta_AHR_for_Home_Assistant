@@ -38,7 +38,7 @@ class AwentaFan(AwentaEntity, FanEntity):
     def is_on(self):
 
         data = self.coordinator.data.get(self.mac, {})
-        # Zgodnie z WEBSOCKET_API.md status on/off to pole "power"
+        # Zgodnie z dokumentacją status zasilania to pole "power"
         return data.get("power", False)
 
     @property
@@ -79,7 +79,8 @@ class AwentaFan(AwentaEntity, FanEntity):
             },
         )
 
-    async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs):
+    async def async_turn_on(self, percentage: int | None = None, preset_mode: str | None = None, **kwargs) -> None:
+        """Włącz wentylator."""
         if percentage is None:
             # If no percentage is given, try to restore last known percentage
             # or just send a generic power on command.

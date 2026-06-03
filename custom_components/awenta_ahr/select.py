@@ -54,6 +54,6 @@ class AwentaModeSelect(AwentaEntity, SelectEntity):
             self.mac,
             {
                 "act": "send_work_mode",
-                "mode_nr": MODE_MAP[option],
+                "level": MODE_MAP[option],
             },
         )

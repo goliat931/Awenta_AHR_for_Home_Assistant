@@ -45,8 +45,8 @@ class AwentaTemperatureSensor(AwentaEntity, SensorEntity):
 
         data = self.coordinator.data.get(self.mac, {})
 
-        if data.get("valid_sensor"):
-            return data.get("temperature_sensor", 0) / 10
+        if data.get("data_valid"):
+            return data.get("temperature_sensor")
 
         return None
 
@@ -66,7 +66,7 @@ class AwentaHumiditySensor(AwentaEntity, SensorEntity):
 
         data = self.coordinator.data.get(self.mac, {})
 
-        if data.get("valid_sensor"):
-            return data.get("humidity_sensor", 0) / 10
+        if data.get("data_valid"):
+            return data.get("humidity_sensor")
 
         return None

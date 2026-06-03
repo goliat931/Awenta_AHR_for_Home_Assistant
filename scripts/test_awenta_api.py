@@ -13,7 +13,6 @@ import asyncio
 import argparse
 import json
 import os
-import urllib.parse
 import sys
 
 import aiohttp
@@ -23,34 +22,30 @@ CRED_PATH = os.path.join(os.path.dirname(__file__), "credentials.json")
 API_URL = "https://ahr.awenta.pl/api.php"
 WS_URL = "wss://ahr.awenta.pl:31990/"
 
-# Use source header only for websocket connection
-WS_HEADERS = {"source": "android"}
-REST_HEADERS = {"User-Agent": "okhttp/4.9.1"}
-
 
 async def login(session, username, password):
     payload = {
         "action": "version",
         "authorization": {
             "email": username,
-            "pass": password, # Zgodnie z WEBSOCKET_API.md, hasło w postaci jawnego tekstu
+            "pass": password,
             "lang": "pl"
         },
         "params": {
-            "model": "Samsung Galaxy (Android 12 S)",
-            "version": "2025_10_04"
+            "model": "Python Test Script",
+            "version": "1.0.0"
         }
     }
-    # We send raw JSON body because form-urlencoded crashes this specific server
-    async with session.post(API_URL, json=payload, headers=REST_HEADERS) as resp:
+    async with session.post(API_URL, json=payload) as resp:
         text = await resp.text()
-        if "Fatal error" in text:
-            print("SERVER CRASH: Form-data encoding is not supported by this endpoint.")
+        print("Login raw response:", text)
         return json.loads(text)
 
 
-async def list_devices(session, username, password):
+async def list_devices(session, key):
     """Używa formatu akcji z dokumentacji REST API."""
+    # Zgodnie z WEBSOCKET_API.md akcja to getListDevices i wymaga autoryzacji
+    # Ale skoro wcześniej używałeś act: list_devices, przygotujmy poprawny payload JSON
     payload = {
         "action": "getListDevices",
         "authorization": {
@@ -59,14 +54,15 @@ async def list_devices(session, username, password):
             "lang": "pl"
         }
     }
-    async with session.post(API_URL, json=payload, headers=REST_HEADERS) as resp:
+    async with session.post(API_URL, json=payload) as resp:
         result = await resp.text()
         print("List devices raw response:", result)
         return json.loads(result)
 
 
 async def websocket_loop(key, socket_id, mac):
-    async with websockets.connect(WS_URL, ssl=True, extra_headers=WS_HEADERS) as ws:
+    headers = {"source": "android"}
+    async with websockets.connect(WS_URL, ssl=True, extra_headers=headers) as ws:
         print("Connected to websocket")
 
         join = {"act": "join", "id": socket_id, "key": key, "mac": mac}
@@ -167,7 +163,7 @@ async def main():
             return
 
         if args.list:
-            devices = await list_devices(session, user, password)
+            devices = await list_devices(session, key)
             print(json.dumps(devices, indent=2, ensure_ascii=False))
 
         if args.ws:

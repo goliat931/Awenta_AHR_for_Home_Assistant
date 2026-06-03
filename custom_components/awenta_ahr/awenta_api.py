@@ -1,11 +1,14 @@
 import asyncio
 import websockets
-import hashlib
 import json
-import urllib.parse
+import logging
 import aiohttp
 
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
 from .const import API_URL, WS_URL
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class AwentaAPI:
@@ -16,7 +19,6 @@ class AwentaAPI:
         self.email = email
         self.password = password
 
-        self.sha1 = None
         self.id_socket = None
         self.key_socket = None
 
@@ -39,68 +41,79 @@ class AwentaAPI:
             )
 
     async def login(self):
-
-        self.sha1 = hashlib.sha1(self.password.encode()).hexdigest()
+        """Logowanie do API. Używamy parametrów identycznych jak w działającym skrypcie."""
+        headers = {
+            "source": "android",
+            "User-Agent": "okhttp/4.9.1"
+        }
 
         payload = {
             "action": "version",
             "authorization": {
                 "email": self.email,
-                "pass": self.sha1,
+                "pass": self.password,
                 "lang": "pl",
             },
-            "params": json.dumps({"model": "HA"}),
+            "params": {
+                "model": "Samsung Galaxy (Android 12 S)",
+                "version": "2025_10_04"
+            },
         }
 
-        data = {"data": json.dumps(payload)}
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                API_URL,
-                data=urllib.parse.urlencode(data),
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            ) as resp:
-                result = await resp.text()
+        session = async_get_clientsession(self.hass)
+        async with session.post(API_URL, json=payload, headers=headers) as resp:
+            result = await resp.text()
+            _LOGGER.debug("Login response: %s", result)
 
         j = json.loads(result)
+        if not j.get("success"):
+            _LOGGER.error("Błąd logowania Awenta: %s", j.get("msg", "Nieznany błąd"))
+            raise Exception(f"Login failed: {j.get('msg')}")
 
-        self.id_socket = j["params"]["id"]
-        self.key_socket = j["params"]["key"]
+        params = j.get("params", {})
+
+        self.id_socket = params.get("id_socket") or params.get("id") or j.get("id") or 1
+        self.key_socket = params.get("key_socket") or params.get("key") or j.get("key")
+
+        if not self.key_socket:
+            _LOGGER.error("Zalogowano, ale nie otrzymano klucza WebSocket")
+            raise Exception("No socket key received")
 
     async def list_devices(self):
 
         payload = {
-            "action": "list_devices",
+            "action": "getListDevices",
             "authorization": {
                 "email": self.email,
-                "pass": self.sha1,
+                "pass": self.password,
                 "lang": "pl",
             },
-            "params": "{}",
         }
 
-        data = {"data": json.dumps(payload)}
+        headers = {"User-Agent": "okhttp/4.9.1"}
+        session = async_get_clientsession(self.hass)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                API_URL,
-                data=urllib.parse.urlencode(data),
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            ) as resp:
-                result = await resp.text()
+        async with session.post(API_URL, json=payload, headers=headers) as resp:
+            result = await resp.text()
+            _LOGGER.debug("List devices response: %s", result)
 
         j = json.loads(result)
 
-        self.devices = j["params"]
+        if not j.get("success") and "devices" not in j and "params" not in j:
+            _LOGGER.error("Błąd pobierania listy urządzeń: %s", j.get("msg"))
+            raise Exception("Failed to list devices")
+
+        # Sprawdzamy oba możliwe klucze, gdzie mogą być urządzenia
+        self.devices = j.get("devices") or j.get("params") or []
+        _LOGGER.info("Znaleziono %d urządzeń Awenta", len(self.devices))
 
     async def websocket_loop(self, mac):
 
         while True:
-
             try:
-
                 ws = await websockets.connect(
                     WS_URL,
+                    ssl=True,
                     extra_headers={"source": "android"},
                 )
 

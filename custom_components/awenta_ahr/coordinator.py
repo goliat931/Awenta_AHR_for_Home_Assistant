@@ -28,10 +28,18 @@ class AwentaCoordinator(DataUpdateCoordinator):
         futures = []
         for device in self.api.devices:
             mac = device["mac"]
-            future = asyncio.Future()
-            self.api._data_futures[mac] = future
-            futures.append(future)
-        await asyncio.gather(*futures)
+            # Jeśli dane już przyszły w międzyczasie, nie czekamy
+            if mac not in self.data:
+                future = self.api._data_futures.setdefault(mac, asyncio.Future())
+                if not future.done():
+                    futures.append(future)
+        
+        if futures:
+            try:
+                # Nie blokuj startu HA dłużej niż 10 sekund
+                await asyncio.wait_for(asyncio.gather(*futures), timeout=10.0)
+            except asyncio.TimeoutError:
+                _LOGGER.warning("Timed out waiting for initial data from Awenta devices. Setup continuing...")
         _LOGGER.debug("Initial data received for all devices")
 
     def _handle_update(self, mac, data):
