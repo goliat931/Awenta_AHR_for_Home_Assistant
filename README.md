@@ -1,59 +1,78 @@
-# Awenta HRV Home Assistant Integration
+# Integracja Awenta HRV dla Home Assistant
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MateiiK&repository=awenta_ha&category=Integration)
-[![GitHub Release](https://img.shields.io/github/v/release/MateiiK/awenta_ha?label=release&style=flat-square)](https://github.com/MateiiK/awenta_ha/releases)
-[![License](https://img.shields.io/github/license/MateiiK/awenta_ha?style=flat-square)](https://github.com/MateiiK/awenta_ha/blob/main/LICENSE)
+Profesjonalna integracja umożliwiająca pełne sterowanie i monitorowanie rekuperatorów marki **Awenta** serii HRV z poziomu systemu Home Assistant. 
 
----
-
-## Overview
-
-This integration adds support for **Awenta HRV (Heat Recovery Ventilation) units** to Home Assistant, including:
-
-- Fan speed control (Low / Medium / High)
-- Temperature, Humidity, and Filter sensors
-- Mode selection (Recuperation / Supply / Extract)
-- Automatic updates via HACS
+*Autorem oryginalnego projektu jest **MateiiK**.*
 
 ---
 
-## Installation
+## Główne Funkcjonalności
 
-### HACS (Recommended)
+Integracja zapewnia dwukierunkową komunikację z urządzeniem, co pozwala na:
 
-1. Open Home Assistant → HACS → Integrations → ⋮ → Custom Repositories  
-2. Repository URL: `https://github.com/MateiiK/awenta_ha`  
-3. Category: **Integration**  
-4. Install and restart Home Assistant  
-5. Add the integration via **Settings → Devices & Services → Add Integration → Awenta HRV**
+### 1. Sterowanie wentylacją (Entity: Fan)
+*   **Włączanie/Wyłączanie:** Pełna kontrola nad stanem zasilania jednostki.
+*   **Regulacja prędkości:** Obsługa 3 stopni prędkości (Niska, Średnia, Wysoka), mapowanych na procentowe wartości w Home Assistant (33%, 66%, 100%).
+*   **Pamięć stanu:** Przywracanie ostatnio używanej prędkości po ponownym włączeniu.
 
-### Manual Install
+### 2. Monitorowanie parametrów (Entities: Sensor)
+*   **Temperatura:** Odczyt temperatury z czujnika jednostki w czasie rzeczywistym.
+*   **Wilgotność:** Odczyt poziomu wilgotności powietrza.
+*   **Status danych:** Inteligentne sprawdzanie poprawności danych (`data_valid`) oraz statusu czujników, co zapobiega wyświetlaniu błędnych odczytów (np. 0°C), gdy czujnik jest offline.
 
-1. Download the repository ZIP: [Download ZIP](https://github.com/MateiiK/awenta_ha/archive/refs/heads/main.zip)  
-2. Extract and copy the folder to:
-/config/custom_components/awenta
-3. Restart Home Assistant  
-4. Add the integration via **Settings → Devices & Services → Add Integration → Awenta HRV**
+### 3. Zarządzanie trybami pracy (Entity: Select)
+Możliwość szybkiego przełączania między zdefiniowanymi trybami pracy urządzenia:
+*   **Recuperation (Odzysk ciepła):** Standardowy tryb pracy zrównoważonej.
+*   **Supply (Nawiew):** Praca wyłącznie wentylatora nawiewnego.
+*   **Extract (Wywiew):** Praca wyłącznie wentylatora wywiewnego.
 
----
-
-## Usage
-
-- The fan slider represents **Low, Medium, High** speeds.  
-- Sensors update automatically via WebSocket.  
-- Modes and other options are available in the **Fan and Select entities**.
-
----
-
-## Support / Donate
-
-If you like this integration, you can support development:
-
-[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/MateiK)
+### 4. Technologia Cloud-Push
+W przeciwieństwie do standardowych integracji opartych na odpytywaniu (polling), to rozwiązanie wykorzystuje:
+*   **REST API:** Do bezpiecznego logowania i autoryzacji sesji.
+*   **WebSocket:** Do natychmiastowego odbierania powiadomień o zmianie stanu urządzenia. Każda zmiana parametrów na panelu fizycznym lub w aplikacji mobilnej jest widoczna w Home Assistant bez opóźnień.
 
 ---
 
-## License
+## Instalacja
 
-MIT License — see [LICENSE](https://github.com/MateiiK/awenta_ha/blob/main/LICENSE)
+### Metoda 1: HACS (Zalecana)
+1.  Przejdź do **HACS** → **Integracje**.
+2.  Kliknij trzy kropki w prawym górnym rogu i wybierz **Niestandardowe repozytoria**.
+3.  Wklej URL: `<https://github.com/MateiiK/awenta_ha>` i wybierz kategorię **Integracja**.
+4.  Zainstaluj komponent i zrestartuj Home Assistant.
 
+### Metoda 2: Instalacja ręczna
+1.  Pobierz archiwum ZIP z repozytorium.
+2.  Wypakuj zawartość do folderu `/config/custom_components/awenta_ahr`.
+3.  Zrestartuj Home Assistant.
+
+---
+
+## Konfiguracja
+
+Po zainstalowaniu integracji:
+1.  Przejdź do **Ustawienia** → **Urządzenia oraz usługi** → **Dodaj integrację**.
+2.  Wyszukaj **Awenta HRV**.
+3.  Zaloguj się przy użyciu swojego adresu e-mail oraz hasła do aplikacji Awenta Pro.
+4.  Integracja automatycznie wykryje wszystkie urządzenia przypisane do Twojego konta.
+
+---
+
+## Architektura projektu
+
+*   **`awenta_api.py`**: Rdzeń komunikacyjny obsługujący sesje i gniazda WebSocket.
+*   **`coordinator.py`**: Zarządza przepływem danych i zapewnia natychmiastowe odświeżanie encji po otrzymaniu ramki JSON.
+*   **`fan.py` / `sensor.py` / `select.py`**: Implementacje specyficznych encji Home Assistant.
+
+---
+
+## Wsparcie i Rozwój
+
+Jeśli integracja jest dla Ciebie użyteczna, możesz wesprzeć autora oryginału:
+
+[!Buy Me A Coffee](https://www.buymeacoffee.com/MateiK)
+
+---
+
+## Licencja
+Projekt udostępniany na licencji MIT. Więcej szczegółów w pliku LICENSE.
