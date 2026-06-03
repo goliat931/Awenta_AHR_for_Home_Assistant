@@ -1,0 +1,13 @@
+{
+  "domain": "awenta",
+  "name": "Awenta HRV",
+  "codeowners": ["@MateiiK"],
+  "config_flow": true,
+  "documentation": "https://github.com/MateiiK/awenta_ha",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/MateiiK/awenta_ha/issues",
+  "requirements": ["aiohttp>=3.9.0", "websockets>=12.0"],
+  "version": "1.0.0",
+  "dependencies": [],
+  "logins": []
+}

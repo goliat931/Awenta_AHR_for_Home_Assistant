@@ -30,7 +30,7 @@ class AwentaFan(AwentaEntity, FanEntity):
 
         self._attr_name = name
         self._attr_unique_id = f"{mac}_fan"
-        self._attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+        self._attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
         self._attr_speed_count = 3
 
     @property
@@ -52,6 +52,7 @@ class AwentaFan(AwentaEntity, FanEntity):
         return int(gear / 3 * 100)
 
     async def async_set_percentage(self, percentage):
+        self._last_percentage = percentage
 
         if percentage == 0:
             await self.async_turn_off()
@@ -78,6 +79,8 @@ class AwentaFan(AwentaEntity, FanEntity):
 
     async def async_turn_on(self, percentage=None, **kwargs):
         if percentage is None:
+            # If no percentage is given, try to restore last known percentage
+            # or just send a generic power on command.
             if getattr(self, "_last_percentage", None):
                 await self.async_set_percentage(self._last_percentage)
                 return
@@ -89,4 +92,10 @@ class AwentaFan(AwentaEntity, FanEntity):
             )
             return
 
+        # If percentage is given, delegate to async_set_percentage
         await self.async_set_percentage(percentage)
+
+    @property
+    def extra_state_attributes(self):
+        """Return the state attributes."""
+        return {"last_percentage": getattr(self, "_last_percentage", None)}

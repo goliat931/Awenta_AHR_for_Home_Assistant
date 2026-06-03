@@ -13,6 +13,7 @@ import asyncio
 import argparse
 import json
 import os
+import urllib.parse
 import sys
 
 import aiohttp
@@ -22,26 +23,55 @@ CRED_PATH = os.path.join(os.path.dirname(__file__), "credentials.json")
 API_URL = "https://ahr.awenta.pl/api.php"
 WS_URL = "wss://ahr.awenta.pl:31990/"
 
+# Use source header only for websocket connection
+WS_HEADERS = {"source": "android"}
+REST_HEADERS = {"User-Agent": "okhttp/4.9.1"}
+
 
 async def login(session, username, password):
-    data = {"login": username, "password": password}
-    payload = {"data": json.dumps(data)}
-    async with session.post(API_URL, data=payload) as resp:
+    payload = {
+        "action": "version",
+        "authorization": {
+            "email": username,
+            "pass": password, # Zgodnie z WEBSOCKET_API.md, hasło w postaci jawnego tekstu
+            "lang": "pl"
+        },
+        "params": {
+            "model": "Samsung Galaxy (Android 12 S)",
+            "version": "2025_10_04"
+        }
+    }
+    # We send raw JSON body because form-urlencoded crashes this specific server
+    async with session.post(API_URL, json=payload, headers=REST_HEADERS) as resp:
         text = await resp.text()
+        if "Fatal error" in text:
+            print("SERVER CRASH: Form-data encoding is not supported by this endpoint.")
         return json.loads(text)
 
 
-async def list_devices(session, key):
-    data = {"act": "list_devices", "key": key}
-    payload = {"data": json.dumps(data)}
-    async with session.post(API_URL, data=payload) as resp:
-        text = await resp.text()
-        return json.loads(text)
+async def list_devices(session, username, password):
+    """Używa formatu akcji z dokumentacji REST API."""
+    payload = {
+        "action": "getListDevices",
+        "authorization": {
+            "email": username,
+            "pass": password, # Zgodnie z WEBSOCKET_API.md, hasło w postaci jawnego tekstu
+            "lang": "pl"
+        }
+    }
+    async with session.post(API_URL, json=payload, headers=REST_HEADERS) as resp:
+        result = await resp.text()
+        print("List devices raw response:", result)
+        return json.loads(result)
 
 
-async def websocket_loop(key, device, mac):
-    async with websockets.connect(WS_URL, ssl=True) as ws:
+async def websocket_loop(key, socket_id, mac):
+    async with websockets.connect(WS_URL, ssl=True, extra_headers=WS_HEADERS) as ws:
         print("Connected to websocket")
+
+        join = {"act": "join", "id": socket_id, "key": key, "mac": mac}
+        await ws.send(json.dumps(join))
+        print("Sent join:", join)
 
         async def reader():
             try:
@@ -60,36 +90,32 @@ async def websocket_loop(key, device, mac):
                 line = line.strip()
                 if not line:
                     continue
-                # allow sending raw JSON or shorthand actions
+
                 if line.startswith("raw "):
                     payload = json.loads(line[4:])
                 else:
-                    # try to parse as JSON otherwise
                     try:
                         payload = json.loads(line)
                     except Exception:
-                        # interpret as simple commands: on/off/gear N
                         parts = line.split()
                         if parts[0] == "on":
-                            payload = {"act": "send_power_on", "key": key, "mac": mac}
+                            payload = {"act": "send_power_on"}
                         elif parts[0] == "off":
-                            payload = {"act": "send_power_off", "key": key, "mac": mac}
+                            payload = {"act": "send_power_off"}
                         elif parts[0] == "gear" and len(parts) > 1:
                             try:
                                 lvl = int(parts[1])
                             except Exception:
-                                lvl = 0
-                            payload = {"act": "send_gear_number", "key": key, "mac": mac, "level": lvl}
+                                lvl = 1
+                            payload = {"act": "send_gear_number", "level": lvl}
                         else:
-                            print("Unknown command. Use raw JSON or: on/off/gear N")
+                            print("Unknown command. Use: on / off / gear N / raw {json}")
                             continue
-                # attach id if missing
-                if "id" not in payload:
-                    payload.setdefault("id", 1)
-                if "key" not in payload and key:
-                    payload["key"] = key
-                if "mac" not in payload and mac:
-                    payload["mac"] = mac
+
+                payload.setdefault("id", socket_id)
+                payload.setdefault("key", key)
+                payload.setdefault("mac", mac)
+
                 text = json.dumps(payload)
                 print("SEND:", text)
                 await ws.send(text)
@@ -98,25 +124,13 @@ async def websocket_loop(key, device, mac):
             await asyncio.sleep(0.1)
 
 
-async def websocket_send(ws, payload):
-    if "id" not in payload:
-        payload.setdefault("id", 1)
-    text = json.dumps(payload)
-    print("SEND:", text)
-    await ws.send(text)
-
-
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--list", action="store_true")
-    parser.add_argument("--ws", action="store_true")
+    parser.add_argument("--list", action="store_true", help="List devices")
+    parser.add_argument("--ws", action="store_true", help="Open interactive websocket")
     parser.add_argument("--user")
     parser.add_argument("--password")
     parser.add_argument("--mac")
-    parser.add_argument("--action", choices=["raw"], help="Immediate websocket action")
-    parser.add_argument("--payload", help="Raw JSON payload string for action")
-    parser.add_argument("--duration", type=int, default=0, help="Seconds to keep websocket open after sending payload")
-    parser.add_argument("--raw", help="Send a single raw json payload and exit (alias for --action raw)")
     args = parser.parse_args()
 
     creds = {}
@@ -127,51 +141,42 @@ async def main():
             except Exception:
                 creds = {}
 
-    user = args.user or creds.get("username")
+    user = args.user or creds.get("email")
     password = args.password or creds.get("password")
     mac = args.mac or creds.get("mac")
 
+    if not user or not password:
+        print("Brak danych logowania. Podaj --user i --password lub ustaw credentials.json")
+        return
+
     async with aiohttp.ClientSession() as session:
+        print("Logging in as", user)
+        resp = await login(session, user, password)
+        print("Login response:", resp)
+
         key = None
-        if user and password:
-            print("Logging in as", user)
-            resp = await login(session, user, password)
-            print("Login response:", resp)
-            key = resp.get("key") or resp.get("data", {}).get("key") if isinstance(resp, dict) else None
+        socket_id = 1
 
-        if args.list:
-            if not key:
-                print("Need login key to list devices")
-            else:
-                devices = await list_devices(session, key)
-                print(json.dumps(devices, indent=2, ensure_ascii=False))
-
-        action = args.action or ("raw" if args.raw else None)
-        payload_text = args.payload or args.raw
-
-        if action == "raw":
-            if not payload_text:
-                parser.error("--action raw requires --payload or --raw")
-            if not key:
-                print("Warning: sending raw without key attached")
-            payload = json.loads(payload_text)
-            if "key" not in payload and key:
-                payload["key"] = key
-            if "mac" not in payload and mac:
-                payload["mac"] = mac
-            print("Action raw payload:", json.dumps(payload, ensure_ascii=False))
-            async with websockets.connect(WS_URL, ssl=True) as ws:
-                await websocket_send(ws, payload)
-                if args.duration and args.duration > 0:
-                    print(f"Keeping websocket open for {args.duration} seconds...")
-                    await asyncio.sleep(args.duration)
+        if resp.get("success"):
+            params = resp.get("params", {})
+            key = params.get("key_socket") or params.get("key") or resp.get("key")
+            socket_id = params.get("id_socket") or params.get("id") or resp.get("id") or 1
+            print(f"key={key}, id={socket_id}")
+        else:
+            print("Login failed:", resp)
             return
 
+        if args.list:
+            devices = await list_devices(session, user, password)
+            print(json.dumps(devices, indent=2, ensure_ascii=False))
+
         if args.ws:
-            if not key:
-                print("Connecting without key. You can type raw JSON or commands (on/off/gear N).")
-            print("Enter commands (on/off/gear N) or 'raw {json}'")
-            await websocket_loop(key, None, mac)
+            if not mac:
+                print("Brak MAC — podaj --mac lub ustaw w credentials.json")
+                return
+            print("Enter commands: on / off / gear N / raw {json}")
+            await websocket_loop(key, socket_id, mac)
+
 
 if __name__ == "__main__":
     try:

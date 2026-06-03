@@ -1,4 +1,3 @@
-from functools import cached_property
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
@@ -15,7 +14,7 @@ class AwentaEntity(CoordinatorEntity):
         self.mac = mac
         self.device_name = name
 
-    @cached_property
+    @property
     def device_info(self):
 
         return DeviceInfo(

@@ -69,7 +69,7 @@ class AwentaAPI:
     async def list_devices(self):
 
         payload = {
-            "action": "getListDevices",
+            "action": "list_devices",
             "authorization": {
                 "email": self.email,
                 "pass": self.sha1,
@@ -100,7 +100,7 @@ class AwentaAPI:
 
                 ws = await websockets.connect(
                     WS_URL,
-                    additional_headers={"source": "android"},
+                    extra_headers={"source": "android"},
                 )
 
                 self.ws[mac] = ws
