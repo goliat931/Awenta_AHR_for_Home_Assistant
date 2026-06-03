@@ -69,7 +69,7 @@ class AwentaAPI:
     async def list_devices(self):
 
         payload = {
-            "action": "list_devices",
+            "action": "getListDevices",
             "authorization": {
                 "email": self.email,
                 "pass": self.sha1,
