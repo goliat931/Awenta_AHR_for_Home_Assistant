@@ -31,7 +31,7 @@ class AwentaFan(AwentaEntity, FanEntity):
         self._attr_name = name
         self._attr_unique_id = f"{mac}_fan"
         self._attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
-        self._last_percentage = None # Initialize _last_percentage
+        self._last_percentage = 33 # Domyślna prędkość startowa (Bieg 1)
         self._attr_speed_count = 3
 
     @property
@@ -58,11 +58,17 @@ class AwentaFan(AwentaEntity, FanEntity):
         return int(gear / 3 * 100)
 
     async def async_set_percentage(self, percentage):
-        self._last_percentage = percentage
-
         if percentage == 0:
             await self.async_turn_off()
             return
+
+        # Zapisujemy prędkość tylko jeśli jest większa od 0
+        self._last_percentage = percentage
+
+        # Zawsze wysyłamy komendę włączenia przy ustawianiu prędkości > 0.
+        # Zapewnia to, że urządzenie ruszy nawet jeśli stan 'power' w HA 
+        # nie zdążył się jeszcze zaktualizować (stale state).
+        await self.api.send(self.mac, {"act": "send_power_on"})
 
         gear = max(1, min(3, round(percentage / 33)))
 
@@ -85,20 +91,11 @@ class AwentaFan(AwentaEntity, FanEntity):
 
     async def async_turn_on(self, percentage=None, preset_mode=None, **kwargs):
         if percentage is None:
-            # If no percentage is given, try to restore last known percentage
-            # or just send a generic power on command.
-            if self._last_percentage is not None:
-                await self.async_set_percentage(self._last_percentage)
-                return
-            await self.api.send(
-                self.mac,
-                {
-                    "act": "send_power_on",
-                },
-            )
-            return
+            # Jeśli kliknięto tylko "Włącz", używamy ostatniej prędkości lub domyślnej
+            percentage = self._last_percentage or 33
 
-        # If percentage is given, delegate to async_set_percentage
+        # Przekazujemy wykonanie do async_set_percentage, 
+        # która obsłuży wysłanie power_on oraz gear_number.
         await self.async_set_percentage(percentage)
 
     @property
