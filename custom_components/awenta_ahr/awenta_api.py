@@ -5,6 +5,7 @@ import logging
 import aiohttp
 import hashlib
 import urllib.parse
+import ssl
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -29,6 +30,7 @@ class AwentaAPI:
         self.ws = {}
         self.last_modes = {}
         self._data_futures = {} # To signal when initial data is received for a MAC
+        self._ssl_context = None
 
     def register_listener(self, callback):
         self.listeners.append(callback)
@@ -134,9 +136,15 @@ class AwentaAPI:
 
         while True:
             try:
+                if self._ssl_context is None:
+                    # Tworzymy kontekst SSL w executorze, aby nie blokować pętli zdarzeń
+                    self._ssl_context = await self.hass.async_add_executor_job(
+                        ssl.create_default_context
+                    )
+
                 ws = await websockets.connect(
                     WS_URL,
-                    ssl=True,
+                    ssl=self._ssl_context,
                     additional_headers={"source": "android"},
                 )
 
