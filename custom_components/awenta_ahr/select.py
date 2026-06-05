@@ -43,17 +43,25 @@ class AwentaModeSelect(AwentaEntity, SelectEntity):
 
     @property
     def current_option(self):
+        data = self.coordinator.data.get(self.mac, {})
 
-        mode = self.coordinator.data.get(self.mac, {}).get("mode")
+        # Jeśli urządzenie jest wyłączone, priorytetyzujemy tryb zapamiętany lokalnie
+        if not data.get("power") and self.mac in self.api.last_modes:
+            return MODE_MAP_REV.get(self.api.last_modes[self.mac])
 
+        mode = data.get("mode")
         return MODE_MAP_REV.get(mode)
 
     async def async_select_option(self, option):
+        mode_nr = MODE_MAP[option]
+        self.api.last_modes[self.mac] = mode_nr
 
         await self.api.send(
             self.mac,
             {
                 "act": "send_work_mode",
-                "mode_nr": MODE_MAP[option],
+                "mode_nr": mode_nr,
             },
         )
+
+        self.async_write_ha_state()

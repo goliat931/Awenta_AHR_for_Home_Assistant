@@ -70,6 +70,17 @@ class AwentaFan(AwentaEntity, FanEntity):
         # nie zdążył się jeszcze zaktualizować (stale state).
         await self.api.send(self.mac, {"act": "send_power_on"})
 
+        # Jeśli użytkownik ustawiał tryb pracy (select), gdy wentylator był wyłączony,
+        # wysyłamy ten tryb teraz przy uruchamianiu.
+        if self.mac in self.api.last_modes:
+            await self.api.send(
+                self.mac,
+                {
+                    "act": "send_work_mode",
+                    "mode_nr": self.api.last_modes[self.mac],
+                },
+            )
+
         gear = max(1, min(3, round(percentage / 33)))
 
         await self.api.send(

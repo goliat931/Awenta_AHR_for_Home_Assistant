@@ -27,6 +27,7 @@ class AwentaAPI:
         self.devices = []
         self.listeners = []
         self.ws = {}
+        self.last_modes = {}
         self._data_futures = {} # To signal when initial data is received for a MAC
 
     def register_listener(self, callback):
