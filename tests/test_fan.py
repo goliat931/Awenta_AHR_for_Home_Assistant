@@ -147,24 +147,14 @@ async def test_fan_percentage_property(mock_coordinator, mock_api):
     mock_coordinator.data["AA:BB:CC:DD:EE:FF"]["recuperation_gear_adv"] = 1
     assert fan.percentage == 33
 
-@pytest.mark.asyncio
-async def test_fan_is_on_missing_data(mock_coordinator, mock_api):
-    """Test that is_on returns None when data is missing for the device."""
-    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
-
-    # Empty the coordinator data
+def test_fan_is_on_missing_data(mock_coordinator, mock_api):
+    """Test that is_on property returns None if data is missing."""
     mock_coordinator.data = {}
-
-    # is_on should return None when data is not found
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
     assert fan.is_on is None
 
-@pytest.mark.asyncio
-async def test_fan_percentage_missing_data(mock_coordinator, mock_api):
-    """Test that percentage returns None when data is missing for the device."""
-    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
-
-    # Empty the coordinator data
+def test_fan_percentage_missing_data(mock_coordinator, mock_api):
+    """Test that percentage property returns None if data is missing."""
     mock_coordinator.data = {}
-
-    # percentage should return None when data is not found
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
     assert fan.percentage is None

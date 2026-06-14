@@ -1,4 +1,3 @@
-# Ignore local credentials used by test scripts
-scripts/credentials.json
-tests/__pycache__
-custom_components/awenta_ahr/__pycache__
+__pycache__/
+*.py[cod]
+*$py.class
