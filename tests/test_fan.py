@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
 
 from homeassistant.components.fan import FanEntityFeature
-from awenta_ahr.fan import AwentaFan
+from custom_components.awenta_ahr.fan import AwentaFan
 
 
 @pytest.fixture

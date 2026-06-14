@@ -6,8 +6,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
 
 from homeassistant.const import UnitOfTemperature, PERCENTAGE
-from awenta_ahr.sensor import AwentaTemperatureSensor, AwentaHumiditySensor, async_setup_entry
-from awenta_ahr.const import DOMAIN
+from custom_components.awenta_ahr.sensor import AwentaTemperatureSensor, AwentaHumiditySensor, async_setup_entry
+from custom_components.awenta_ahr.const import DOMAIN
 
 
 @pytest.fixture
