@@ -159,8 +159,8 @@ class AwentaAPI:
                     for callback in self.listeners:
                         callback(mac, data)
 
-            except Exception:
-
+            except Exception as e:
+                _LOGGER.error("Error in websocket loop for %s: %s", mac, e)
                 await asyncio.sleep(5)
 
     async def send(self, mac, payload):
