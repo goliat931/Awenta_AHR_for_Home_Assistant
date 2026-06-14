@@ -21,6 +21,9 @@ class AwentaAPI:
         self.hass = hass
         self.email = email
         self.password = password
+        self._sha1_pass = hashlib.sha1(
+            self.password.encode("iso-8859-1")
+        ).hexdigest()
 
         self.id_socket = None
         self.key_socket = None
@@ -47,10 +50,6 @@ class AwentaAPI:
 
     async def login(self):
 
-        sha1_pass = hashlib.sha1(
-            self.password.encode("iso-8859-1")
-        ).hexdigest()
-
         # params musi być stringiem JSON wg quick_test.py
         params_str = json.dumps(
             {"model": "Samsung Galaxy (Android 12 S)"},
@@ -61,7 +60,7 @@ class AwentaAPI:
             "action": "version",
             "authorization": {
                 "email": self.email,
-                "pass": sha1_pass,
+                "pass": self._sha1_pass,
                 "lang": "pl",
             },
             "params": params_str,
@@ -98,15 +97,11 @@ class AwentaAPI:
 
     async def list_devices(self):
 
-        sha1_pass = hashlib.sha1(
-            self.password.encode("iso-8859-1")
-        ).hexdigest()
-
         payload = {
             "action": "list_devices", # Zmieniono na "list_devices" zgodnie z quick_test.py
             "authorization": {
                 "email": self.email,
-                "pass": sha1_pass,
+                "pass": self._sha1_pass,
                 "lang": "pl",
             },
             "params": "{}" # Dodano pusty string JSON dla params, zgodnie z quick_test.py
