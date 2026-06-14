@@ -15,6 +15,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class AwentaAPI:
+    REQUEST_HEADERS = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
+    }
 
     def __init__(self, hass, email, password):
 
@@ -70,16 +74,11 @@ class AwentaAPI:
         json_payload = json.dumps(payload, separators=(",", ":"))
         body = f"data={urllib.parse.quote_plus(json_payload)}"
 
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
-        }
-
         session = async_get_clientsession(self.hass)
         async with session.post(
             API_URL,
             data=body,
-            headers=headers,
+            headers=self.REQUEST_HEADERS,
         ) as resp:
             result = await resp.text()
             _LOGGER.debug("Login response: %s", result)
@@ -115,16 +114,11 @@ class AwentaAPI:
         json_payload = json.dumps(payload, separators=(",", ":"))
         body = f"data={urllib.parse.quote_plus(json_payload)}"
 
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
-        }
-
         session = async_get_clientsession(self.hass)
         async with session.post(
             API_URL,
             data=body,
-            headers=headers,
+            headers=self.REQUEST_HEADERS,
         ) as resp:
             result = await resp.text()
             _LOGGER.debug("list_devices response: %s", result)
