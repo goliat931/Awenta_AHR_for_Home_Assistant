@@ -51,16 +51,9 @@ class AwentaAPI:
                 self.websocket_loop(device["mac"])
             )
 
-    async def login(self):
-
-        # params musi być stringiem JSON wg quick_test.py
-        params_str = json.dumps(
-            {"model": "Samsung Galaxy (Android 12 S)"},
-            separators=(",", ":")
-        )
-
+    async def _request(self, action: str, params_str: str = "{}"):
         payload = {
-            "action": "version",
+            "action": action,
             "authorization": {
                 "email": self.email,
                 "pass": self._sha1_pass,
@@ -79,9 +72,20 @@ class AwentaAPI:
             headers=self.REQUEST_HEADERS,
         ) as resp:
             result = await resp.text()
-            _LOGGER.debug("Login response: %s", result)
+            _LOGGER.debug("%s response: %s", action, result)
 
-        j = json.loads(result)
+        return json.loads(result)
+
+    async def login(self):
+
+        # params musi być stringiem JSON wg quick_test.py
+        params_str = json.dumps(
+            {"model": "Samsung Galaxy (Android 12 S)"},
+            separators=(",", ":")
+        )
+
+        j = await self._request("version", params_str)
+
         if not j.get("success"):
             raise Exception(f"Login failed: {j.get('msg')}")
 
@@ -95,29 +99,7 @@ class AwentaAPI:
 
     async def list_devices(self):
 
-        payload = {
-            "action": "list_devices", # Zmieniono na "list_devices" zgodnie z quick_test.py
-            "authorization": {
-                "email": self.email,
-                "pass": self._sha1_pass,
-                "lang": "pl",
-            },
-            "params": "{}" # Dodano pusty string JSON dla params, zgodnie z quick_test.py
-        }
-
-        json_payload = json.dumps(payload, separators=(",", ":"))
-        body = f"data={urllib.parse.quote_plus(json_payload)}"
-
-        session = async_get_clientsession(self.hass)
-        async with session.post(
-            API_URL,
-            data=body,
-            headers=self.REQUEST_HEADERS,
-        ) as resp:
-            result = await resp.text()
-            _LOGGER.debug("list_devices response: %s", result)
-
-        j = json.loads(result)
+        j = await self._request("list_devices", "{}")
         self.devices = j.get("devices") or j.get("params") or []
 
     async def websocket_loop(self, mac):
