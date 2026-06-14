@@ -2,7 +2,6 @@ import asyncio
 import websockets
 import json
 import logging
-import aiohttp
 import hashlib
 import urllib.parse
 import ssl
