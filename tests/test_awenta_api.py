@@ -1,9 +1,5 @@
 import pytest
-<<<<<<< HEAD
-from unittest.mock import AsyncMock, patch, MagicMock
-=======
 from unittest.mock import patch, MagicMock
->>>>>>> 81bedee (🧪 Add tests for login method in AwentaAPI)
 import sys
 from pathlib import Path
 import json
@@ -12,24 +8,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
 
 from awenta_ahr.awenta_api import AwentaAPI
 
-<<<<<<< HEAD
-@pytest.mark.asyncio
-async def test_login_failure():
-    hass = MagicMock()
-    api = AwentaAPI(hass, "test@test.com", "password")
-
-    # Create mock session and response
-    mock_response = AsyncMock()
-    mock_response.text.return_value = json.dumps({"success": False, "msg": "Error"})
-
-    mock_session = MagicMock()
-    # async with session.post() as resp:
-    mock_session.post.return_value.__aenter__.return_value = mock_response
-
-    with patch("awenta_ahr.awenta_api.async_get_clientsession", return_value=mock_session):
-        with pytest.raises(Exception, match="Login failed: Error"):
-            await api.login()
-=======
 @pytest.fixture
 def mock_hass():
     hass = MagicMock()
@@ -159,4 +137,3 @@ async def test_awenta_api_login_id_default_fallback(mock_get_session, mock_hass)
 
     assert api.id_socket == 1
     assert api.key_socket == "test_key3"
->>>>>>> 81bedee (🧪 Add tests for login method in AwentaAPI)

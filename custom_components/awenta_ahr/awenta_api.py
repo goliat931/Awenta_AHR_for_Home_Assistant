@@ -6,6 +6,7 @@ import hashlib
 import urllib.parse
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util.ssl import client_context
 from homeassistant.util.ssl import get_default_context
 
 from .const import API_URL, WS_URL
@@ -100,6 +101,7 @@ class AwentaAPI:
     async def list_devices(self):
 
         j = await self._request("list_devices", "{}")
+        j = await self._request("list_devices", "{}")
         self.devices = j.get("devices") or j.get("params") or []
 
     async def websocket_loop(self, mac):
@@ -107,7 +109,7 @@ class AwentaAPI:
         while True:
             try:
                 if self._ssl_context is None:
-                    self._ssl_context = get_default_context()
+                    self._ssl_context = client_context()
 
                 ws = await websockets.connect(
                     WS_URL,

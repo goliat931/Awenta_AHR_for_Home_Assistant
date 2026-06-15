@@ -2,7 +2,11 @@ import asyncio
 import json
 import logging
 import aiohttp
-import websockets
+
+try:
+    import optional_module  # pyright: ignore[reportMissingImports]
+except ImportError:
+    optional_module = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,7 +69,6 @@ class AwentaAPI:
                 return False
 
             # Pobieramy klucze sesji z odpowiedzi
-            # Uwaga: Serwer może zwracać je bezpośrednio lub w zagnieżdżonym obiekcie
             self.session_key = data.get("key_socket") or data.get("params", {}).get("key_socket")
             self.session_id = data.get("id_socket") or data.get("params", {}).get("id_socket")
 
@@ -91,27 +94,28 @@ class AwentaAPI:
         self._listeners.append(callback)
 
     async def listen_websocket(self, device_mac=None, callback=None):
-        """Połączenie z WebSocketem i nasłuchiwanie na aktualizacje."""
+        """Połączenie z WebSocketem za pomocą aiohttp (natywnie dla Home Assistant)."""
         if not self.session_key:
             await self.login()
 
         headers = {"source": "android"}
+        session = self._get_session()
         
         while True:
             try:
-                async with websockets.connect(self.ws_url, additional_headers=headers) as websocket:
+                # Używamy aiohttp do połączenia WebSocket
+                async with session.ws_connect(self.ws_url, headers=headers) as websocket:
                     self._ws = websocket
                     _LOGGER.info("Połączono z WebSocket Awenta")
                     
                     async for message in websocket:
-                        data = json.loads(message)
+                        # W aiohttp dane z wiadomości znajdują się pod atrybutem .data
+                        data = json.loads(message.data)
                         mac = data.get("mac")
                         
-                        # Oznaczamy, że otrzymaliśmy dane początkowe, aby HA nie czekał 10 sekund
                         if mac and mac in self._data_futures and not self._data_futures[mac].done():
                             self._data_futures[mac].set_result(True)
 
-                        # Zachowanie kompatybilności ze skryptem test_connection.py
                         if callback:
                             callback(data)
                             
@@ -136,7 +140,8 @@ class AwentaAPI:
         if level is not None:
             payload["level"] = level
 
-        await self._ws.send(json.dumps(payload))
+        # Zmiana z send() na send_str() dla aiohttp
+        await self._ws.send_str(json.dumps(payload))
 
     async def send(self, mac, payload_dict):
         """Wysyłanie niestandardowych komend słownikowych używanych w Home Assistant."""
@@ -150,4 +155,6 @@ class AwentaAPI:
             "mac": mac
         }
         payload.update(payload_dict)
-        await self._ws.send(json.dumps(payload))
+        
+        # Zmiana z send() na send_str() dla aiohttp
+        await self._ws.send_str(json.dumps(payload))
