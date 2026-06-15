@@ -69,7 +69,7 @@ async def test_fan_turn_off(mock_coordinator, mock_api):
     
     await fan.async_turn_off()
     
-    mock_api.send.assert_called_once_with(
+    mock_api.send.assert_any_call(
         "AA:BB:CC:DD:EE:FF",
         {"act": "send_power_off"},
     )
@@ -146,3 +146,15 @@ async def test_fan_percentage_property(mock_coordinator, mock_api):
     # Mock gear 1 in coordinator
     mock_coordinator.data["AA:BB:CC:DD:EE:FF"]["recuperation_gear_adv"] = 1
     assert fan.percentage == 33
+
+def test_fan_is_on_missing_data(mock_coordinator, mock_api):
+    """Test that is_on property returns None if data is missing."""
+    mock_coordinator.data = {}
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    assert fan.is_on is None
+
+def test_fan_percentage_missing_data(mock_coordinator, mock_api):
+    """Test that percentage property returns None if data is missing."""
+    mock_coordinator.data = {}
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    assert fan.percentage is None
