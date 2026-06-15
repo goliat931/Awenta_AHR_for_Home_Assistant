@@ -4,11 +4,17 @@ import json
 import urllib.parse
 import requests
 import hashlib
+import os
+import sys
 
 API_URL = "https://ahr.awenta.pl/api.php"
 
-EMAIL = "goliat931@gmail.com"
-PASSWORD = "k7VdGX2NVB8NBFm"
+EMAIL = os.environ.get("AWENTA_EMAIL")
+PASSWORD = os.environ.get("AWENTA_PASSWORD")
+
+if not EMAIL or not PASSWORD:
+    print("Error: AWENTA_EMAIL and AWENTA_PASSWORD environment variables must be set.")
+    sys.exit(1)
 
 SHA1_PASSWORD = hashlib.sha1(
     PASSWORD.encode("iso-8859-1")

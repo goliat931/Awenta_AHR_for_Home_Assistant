@@ -84,11 +84,10 @@ async def test_fan_set_percentage(mock_coordinator, mock_api):
     # Set to 50% (gear 2)
     await fan.async_set_percentage(50)
     
-    # Check API was called with correct gear
-    mock_api.send.assert_any_call(
-        "AA:BB:CC:DD:EE:FF",
-        {"act": "send_gear_number", "gear_nr": 2},
-    )
+    # Check API was called with correct commands (power on, then set gear)
+    assert mock_api.send.call_count == 2
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_power_on"})
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 2})
     
     # Check last_percentage was stored
     assert fan._last_percentage == 50
@@ -102,10 +101,9 @@ async def test_fan_set_percentage_gear_1(mock_coordinator, mock_api):
     # Set to 33% (gear 1)
     await fan.async_set_percentage(33)
     
-    mock_api.send.assert_any_call(
-        "AA:BB:CC:DD:EE:FF",
-        {"act": "send_gear_number", "gear_nr": 1},
-    )
+    assert mock_api.send.call_count == 2
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_power_on"})
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 1})
 
 
 @pytest.mark.asyncio
@@ -116,10 +114,10 @@ async def test_fan_turn_on_with_percentage(mock_coordinator, mock_api):
     
     await fan.async_turn_on(percentage=66)
     
-    # Check API was called with correct gear for 66%
-    mock_api.send.assert_called()
-    call_args = mock_api.send.call_args[0]
-    assert call_args[1]["gear_nr"] == 2
+    # Check API was called with correct gear for 66% (and power_on)
+    assert mock_api.send.call_count == 2
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_power_on"})
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 2})
 
 
 @pytest.mark.asyncio
@@ -135,11 +133,10 @@ async def test_fan_turn_on_uses_last_percentage(mock_coordinator, mock_api):
     # Now turn on without percentage - should use last 75%
     await fan.async_turn_on()
     
-    # Check API was called
-    mock_api.send.assert_called()
-    call_args = mock_api.send.call_args[0]
-    # 75% -> 75/33 = 2.27 -> rounds to gear 2
-    assert call_args[1]["gear_nr"] == 2
+    # Check API was called (power on and set gear)
+    assert mock_api.send.call_count == 2
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_power_on"})
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 2})
 
 @pytest.mark.asyncio
 async def test_fan_percentage_property(mock_coordinator, mock_api):
@@ -149,3 +146,15 @@ async def test_fan_percentage_property(mock_coordinator, mock_api):
     # Mock gear 1 in coordinator
     mock_coordinator.data["AA:BB:CC:DD:EE:FF"]["recuperation_gear_adv"] = 1
     assert fan.percentage == 33
+
+def test_fan_is_on_missing_data(mock_coordinator, mock_api):
+    """Test that is_on property returns None if data is missing."""
+    mock_coordinator.data = {}
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    assert fan.is_on is None
+
+def test_fan_percentage_missing_data(mock_coordinator, mock_api):
+    """Test that percentage property returns None if data is missing."""
+    mock_coordinator.data = {}
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    assert fan.percentage is None

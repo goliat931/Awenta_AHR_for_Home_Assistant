@@ -2,7 +2,6 @@ import asyncio
 import websockets
 import json
 import logging
-import aiohttp
 import hashlib
 import urllib.parse
 import ssl
@@ -15,12 +14,19 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class AwentaAPI:
+    REQUEST_HEADERS = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
+    }
 
     def __init__(self, hass, email, password):
 
         self.hass = hass
         self.email = email
         self.password = password
+        self._sha1_pass = hashlib.sha1(
+            self.password.encode("iso-8859-1")
+        ).hexdigest()
 
         self.id_socket = None
         self.key_socket = None
@@ -45,23 +51,12 @@ class AwentaAPI:
                 self.websocket_loop(device["mac"])
             )
 
-    async def login(self):
-
-        sha1_pass = hashlib.sha1(
-            self.password.encode("iso-8859-1")
-        ).hexdigest()
-
-        # params musi być stringiem JSON wg quick_test.py
-        params_str = json.dumps(
-            {"model": "Samsung Galaxy (Android 12 S)"},
-            separators=(",", ":")
-        )
-
+    async def _request(self, action: str, params_str: str = "{}"):
         payload = {
-            "action": "version",
+            "action": action,
             "authorization": {
                 "email": self.email,
-                "pass": sha1_pass,
+                "pass": self._sha1_pass,
                 "lang": "pl",
             },
             "params": params_str,
@@ -70,21 +65,27 @@ class AwentaAPI:
         json_payload = json.dumps(payload, separators=(",", ":"))
         body = f"data={urllib.parse.quote_plus(json_payload)}"
 
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
-        }
-
         session = async_get_clientsession(self.hass)
         async with session.post(
             API_URL,
             data=body,
-            headers=headers,
+            headers=self.REQUEST_HEADERS,
         ) as resp:
             result = await resp.text()
-            _LOGGER.debug("Login response: %s", result)
+            _LOGGER.debug("%s response: %s", action, result)
 
-        j = json.loads(result)
+        return json.loads(result)
+
+    async def login(self):
+
+        # params musi być stringiem JSON wg quick_test.py
+        params_str = json.dumps(
+            {"model": "Samsung Galaxy (Android 12 S)"},
+            separators=(",", ":")
+        )
+
+        j = await self._request("version", params_str)
+
         if not j.get("success"):
             raise Exception(f"Login failed: {j.get('msg')}")
 
@@ -98,38 +99,7 @@ class AwentaAPI:
 
     async def list_devices(self):
 
-        sha1_pass = hashlib.sha1(
-            self.password.encode("iso-8859-1")
-        ).hexdigest()
-
-        payload = {
-            "action": "list_devices", # Zmieniono na "list_devices" zgodnie z quick_test.py
-            "authorization": {
-                "email": self.email,
-                "pass": sha1_pass,
-                "lang": "pl",
-            },
-            "params": "{}" # Dodano pusty string JSON dla params, zgodnie z quick_test.py
-        }
-
-        json_payload = json.dumps(payload, separators=(",", ":"))
-        body = f"data={urllib.parse.quote_plus(json_payload)}"
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)"
-        }
-
-        session = async_get_clientsession(self.hass)
-        async with session.post(
-            API_URL,
-            data=body,
-            headers=headers,
-        ) as resp:
-            result = await resp.text()
-            _LOGGER.debug("list_devices response: %s", result)
-
-        j = json.loads(result)
+        j = await self._request("list_devices", "{}")
         self.devices = j.get("devices") or j.get("params") or []
 
     async def websocket_loop(self, mac):
@@ -171,8 +141,8 @@ class AwentaAPI:
                     for callback in self.listeners:
                         callback(mac, data)
 
-            except Exception:
-
+            except Exception as e:
+                _LOGGER.error("Error in websocket loop for %s: %s", mac, e)
                 await asyncio.sleep(5)
 
     async def send(self, mac, payload):
