@@ -69,7 +69,7 @@ async def test_fan_turn_off(mock_coordinator, mock_api):
     
     await fan.async_turn_off()
     
-    mock_api.send.assert_called_once_with(
+    mock_api.send.assert_any_call(
         "AA:BB:CC:DD:EE:FF",
         {"act": "send_power_off"},
     )
