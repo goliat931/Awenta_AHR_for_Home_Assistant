@@ -4,9 +4,9 @@ import json
 import logging
 import hashlib
 import urllib.parse
-import ssl
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util.ssl import client_context
 
 from .const import API_URL, WS_URL
 
@@ -107,10 +107,7 @@ class AwentaAPI:
         while True:
             try:
                 if self._ssl_context is None:
-                    # Tworzymy kontekst SSL w executorze, aby nie blokować pętli zdarzeń
-                    self._ssl_context = await self.hass.async_add_executor_job(
-                        ssl.create_default_context
-                    )
+                    self._ssl_context = client_context()
 
                 ws = await websockets.connect(
                     WS_URL,
