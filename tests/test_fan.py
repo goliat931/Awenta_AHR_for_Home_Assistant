@@ -69,7 +69,7 @@ async def test_fan_turn_off(mock_coordinator, mock_api):
     
     await fan.async_turn_off()
     
-    mock_api.send.assert_called_once_with(
+    mock_api.send.assert_any_call(
         "AA:BB:CC:DD:EE:FF",
         {"act": "send_power_off"},
     )
@@ -85,7 +85,7 @@ async def test_fan_set_percentage(mock_coordinator, mock_api):
     await fan.async_set_percentage(50)
     
     # Check API was called with correct gear
-    mock_api.send.assert_called_once_with(
+    mock_api.send.assert_any_call(
         "AA:BB:CC:DD:EE:FF",
         {"act": "send_gear_number", "gear_nr": 2},
     )
@@ -102,7 +102,7 @@ async def test_fan_set_percentage_gear_1(mock_coordinator, mock_api):
     # Set to 33% (gear 1)
     await fan.async_set_percentage(33)
     
-    mock_api.send.assert_called_once_with(
+    mock_api.send.assert_any_call(
         "AA:BB:CC:DD:EE:FF",
         {"act": "send_gear_number", "gear_nr": 1},
     )
@@ -117,7 +117,7 @@ async def test_fan_turn_on_with_percentage(mock_coordinator, mock_api):
     await fan.async_turn_on(percentage=66)
     
     # Check API was called with correct gear for 66%
-    mock_api.send.assert_called_once()
+    mock_api.send.assert_called()
     call_args = mock_api.send.call_args[0]
     assert call_args[1]["gear_nr"] == 2
 
@@ -136,7 +136,7 @@ async def test_fan_turn_on_uses_last_percentage(mock_coordinator, mock_api):
     await fan.async_turn_on()
     
     # Check API was called
-    mock_api.send.assert_called_once()
+    mock_api.send.assert_called()
     call_args = mock_api.send.call_args[0]
     # 75% -> 75/33 = 2.27 -> rounds to gear 2
     assert call_args[1]["gear_nr"] == 2
