@@ -22,10 +22,6 @@ class AwentaAPI:
         self.session_id = None
         self._ws = None
         self._session = None
-        self.devices = []
-        self._data_futures = {}
-        self.last_modes = {}
-        self._listeners = []
 
     def _get_session(self):
         """Pobierz lub utwórz współdzieloną sesję HTTP."""
@@ -68,14 +64,15 @@ class AwentaAPI:
                 _LOGGER.error("Błąd logowania: %s", data.get("message"))
                 return False
 
-            # Pobieramy klucze sesji z odpowiedzi
-            self.session_key = data.get("key_socket") or data.get("params", {}).get("key_socket")
-            self.session_id = data.get("id_socket") or data.get("params", {}).get("id_socket")
-
-            if not self.session_key:
-                _LOGGER.error("Zalogowano, ale nie otrzymano kluczy WebSocket. Odpowiedź: %s", data)
-                return False
-            return True
+                # Pobieramy klucze sesji z odpowiedzi
+                # Uwaga: Serwer może zwracać je bezpośrednio lub w zagnieżdżonym obiekcie
+                self.session_key = data.get("key_socket") or data.get("params", {}).get("key_socket")
+                self.session_id = data.get("id_socket") or data.get("params", {}).get("id_socket")
+                
+                if not self.session_key:
+                    _LOGGER.error("Zalogowano, ale nie otrzymano kluczy WebSocket. Odpowiedź: %s", data)
+                    return False
+                return True
 
     async def get_devices(self):
         """Pobieranie listy urządzeń przypisanych do konta."""
@@ -83,18 +80,13 @@ class AwentaAPI:
             "action": "getListDevices",
             "authorization": {"email": self.email, "pass": self.password, "lang": "pl"}
         }
-        session = self._get_session()
-        async with session.post(self.base_url, data={"data": json.dumps(payload)}) as response:
-            data = await response.json()
-            self.devices = data.get("devices", [])
-            return self.devices
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.base_url, data={"data": json.dumps(payload)}) as response:
+                data = await response.json()
+                return data.get("devices", [])
 
-    def register_listener(self, callback):
-        """Rejestruje funkcję nasłuchującą na aktualizacje WebSocket (dla Home Assistant)."""
-        self._listeners.append(callback)
-
-    async def listen_websocket(self, device_mac=None, callback=None):
-        """Połączenie z WebSocketem za pomocą aiohttp (natywnie dla Home Assistant)."""
+    async def listen_websocket(self, device_mac, callback):
+        """Połączenie z WebSocketem i nasłuchiwanie na aktualizacje."""
         if not self.session_key:
             await self.login()
 
