@@ -6,6 +6,8 @@ import hashlib
 import urllib.parse
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util.ssl import client_context
+from homeassistant.util.ssl import client_context
 from homeassistant.util.ssl import get_default_context
 
 from .const import API_URL, WS_URL
@@ -52,7 +54,9 @@ class AwentaAPI:
             )
 
     async def _request(self, action: str, params_str: str = "{}"):
+    async def _request(self, action: str, params_str: str = "{}"):
         payload = {
+            "action": action,
             "action": action,
             "authorization": {
                 "email": self.email,
@@ -73,6 +77,19 @@ class AwentaAPI:
         ) as resp:
             result = await resp.text()
             _LOGGER.debug("%s response: %s", action, result)
+            _LOGGER.debug("%s response: %s", action, result)
+
+        return json.loads(result)
+
+    async def login(self):
+
+        # params musi być stringiem JSON wg quick_test.py
+        params_str = json.dumps(
+            {"model": "Samsung Galaxy (Android 12 S)"},
+            separators=(",", ":")
+        )
+
+        j = await self._request("version", params_str)
 
         return json.loads(result)
 
@@ -100,6 +117,8 @@ class AwentaAPI:
     async def list_devices(self):
 
         j = await self._request("list_devices", "{}")
+        j = await self._request("list_devices", "{}")
+        j = await self._request("list_devices", "{}")
         self.devices = j.get("devices") or j.get("params") or []
 
     async def websocket_loop(self, mac):
@@ -107,7 +126,8 @@ class AwentaAPI:
         while True:
             try:
                 if self._ssl_context is None:
-                    self._ssl_context = get_default_context()
+                    self._ssl_context = client_context()
+                    self._ssl_context = client_context()
 
                 ws = await websockets.connect(
                     WS_URL,
