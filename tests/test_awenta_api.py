@@ -137,3 +137,46 @@ async def test_awenta_api_login_id_default_fallback(mock_get_session, mock_hass)
 
     assert api.id_socket == 1
     assert api.key_socket == "test_key3"
+
+@pytest.mark.asyncio
+async def test_awenta_api_list_devices_in_devices(mock_hass):
+    """Test list_devices populates devices from 'devices' key."""
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+
+    expected_devices = [{"mac": "00:11:22:33:44:55", "name": "Awenta Fan 1"}]
+
+    with patch.object(api, '_request', new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"devices": expected_devices}
+
+        await api.list_devices()
+
+        mock_request.assert_called_once_with("list_devices", "{}")
+        assert api.devices == expected_devices
+
+@pytest.mark.asyncio
+async def test_awenta_api_list_devices_in_params(mock_hass):
+    """Test list_devices populates devices from 'params' key if 'devices' is not present."""
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+
+    expected_devices = [{"mac": "66:77:88:99:AA:BB", "name": "Awenta Fan 2"}]
+
+    with patch.object(api, '_request', new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"params": expected_devices}
+
+        await api.list_devices()
+
+        mock_request.assert_called_once_with("list_devices", "{}")
+        assert api.devices == expected_devices
+
+@pytest.mark.asyncio
+async def test_awenta_api_list_devices_empty(mock_hass):
+    """Test list_devices handles empty response gracefully."""
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+
+    with patch.object(api, '_request', new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {}
+
+        await api.list_devices()
+
+        mock_request.assert_called_once_with("list_devices", "{}")
+        assert api.devices == []
