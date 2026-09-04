@@ -1,5 +1,8 @@
 {
   "name": "Awenta HRV",
-  "domains": ["awenta_ahr"],
-  "content_in_root": false
+  "content_in_root": false,
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "awenta_ahr.zip",
+  "homeassistant": "2024.1.0"
 }

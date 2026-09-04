@@ -1,3 +1,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# lokalne dane logowania do skryptow testowych
+scripts/credentials.json
+credentials.json
+
+.venv/
+*.zip
