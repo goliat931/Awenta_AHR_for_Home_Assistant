@@ -97,7 +97,8 @@ async def test_fan_set_percentage(mock_coordinator, mock_api):
 async def test_fan_set_percentage_gear_1(mock_coordinator, mock_api):
     """Test setting fan to gear 1 (33%)."""
     fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
-    
+    fan.async_write_ha_state = MagicMock()
+
     # Set to 33% (gear 1)
     await fan.async_set_percentage(33)
     
@@ -158,3 +159,51 @@ def test_fan_percentage_missing_data(mock_coordinator, mock_api):
     mock_coordinator.data = {}
     fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
     assert fan.percentage is None
+
+
+@pytest.mark.asyncio
+async def test_fan_set_percentage_is_optimistic_before_device_confirms(mock_coordinator, mock_api):
+    """Regression test: HA should show the requested speed immediately,
+    not "off", while waiting for the device to echo the new state back
+    over the websocket (this used to require clicking the speed twice)."""
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    fan.async_write_ha_state = MagicMock()
+
+    # Urzadzenie w coordinatorze wciaz pokazuje stary stan (wylaczony) -
+    # tak jak tuz po wyslaniu komendy, zanim przyjdzie echo z WebSocket.
+    await fan.async_set_percentage(66)
+
+    assert fan.is_on is True
+    assert fan.percentage == 66
+    fan.async_write_ha_state.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_fan_optimistic_state_cleared_once_device_confirms(mock_coordinator, mock_api):
+    """Once the coordinator receives an authoritative update, it should win
+    over the optimistic guess (and not get stuck showing a stale value)."""
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    fan.async_write_ha_state = MagicMock()
+    fan.async_on_remove = MagicMock()
+
+    await fan.async_set_percentage(66)
+    assert fan.percentage == 66  # optimistic
+
+    # Urzadzenie potwierdza inny bieg niz zakladalismy optymistycznie.
+    mock_coordinator.data["AA:BB:CC:DD:EE:FF"] = {"power": True, "recuperation_gear_adv": 1}
+    fan._handle_coordinator_update()
+
+    assert fan.is_on is True
+    assert fan.percentage == 33
+
+
+@pytest.mark.asyncio
+async def test_fan_turn_off_is_optimistic(mock_coordinator, mock_api):
+    """turn_off should also reflect immediately in HA, not just on the device."""
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    fan.async_write_ha_state = MagicMock()
+
+    await fan.async_turn_off()
+
+    assert fan.is_on is False
+    assert fan.percentage == 0

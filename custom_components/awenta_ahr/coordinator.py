@@ -44,6 +44,12 @@ class AwentaCoordinator(DataUpdateCoordinator):
 
     def _handle_update(self, mac, data):
 
-        self.data[mac] = data
+        # Serwer Awenta czasem wysyła stan częściowo (widać to po polach
+        # update/upd_part/count_parts w API). Podmiana całego słownika
+        # (self.data[mac] = data) potrafi więc chwilowo "zgubić" pola takie
+        # jak power/recuperation_gear_adv, przez co encje w HA pokazują
+        # wentylator jako wyłączony tuż po zmianie prędkości. Scalamy więc
+        # nowe dane z tym, co już wiemy, zamiast nadpisywać w całości.
+        self.data[mac] = {**self.data.get(mac, {}), **data}
 
         self.async_set_updated_data(self.data)

@@ -34,9 +34,25 @@ class AwentaFan(AwentaEntity, FanEntity):
         self._last_percentage = 33 # Domyślna prędkość startowa (Bieg 1)
         self._attr_speed_count = 3
 
+        # Stan optymistyczny: ustawiany od razu po wysłaniu komendy, żeby HA
+        # nie pokazywało wentylatora jako wyłączonego, dopóki nie dotrze
+        # (czasem opóźnione o sekundę-dwie) potwierdzenie z urządzenia przez
+        # WebSocket. Bez tego trzeba było klikać zmianę prędkości dwa razy.
+        self._optimistic_is_on = None
+        self._optimistic_percentage = None
+
+    def _handle_coordinator_update(self):
+        """Każda świeża wiadomość z urządzenia wygrywa z naszą optymistyczną zgadywanką."""
+        self._optimistic_is_on = None
+        self._optimistic_percentage = None
+        super()._handle_coordinator_update()
+
     @property
     def is_on(self):
         """Return true if fan is on."""
+        if self._optimistic_is_on is not None:
+            return self._optimistic_is_on
+
         data = self.coordinator.data.get(self.mac)
         if data is None:
             return None
@@ -46,6 +62,9 @@ class AwentaFan(AwentaEntity, FanEntity):
     @property
     def percentage(self):
         """Return the current speed percentage."""
+        if self._optimistic_percentage is not None:
+            return self._optimistic_percentage
+
         data = self.coordinator.data.get(self.mac)
         if data is None:
             return None
@@ -64,6 +83,12 @@ class AwentaFan(AwentaEntity, FanEntity):
 
         # Zapisujemy prędkość tylko jeśli jest większa od 0
         self._last_percentage = percentage
+
+        # Pokaż od razu żądany stan w HA (patrz komentarz w __init__), zanim
+        # jeszcze przyjdzie potwierdzenie z urządzenia.
+        self._optimistic_is_on = True
+        self._optimistic_percentage = percentage
+        self.async_write_ha_state()
 
         # Zawsze wysyłamy komendę włączenia przy ustawianiu prędkości > 0.
         # Zapewnia to, że urządzenie ruszy nawet jeśli stan 'power' w HA 
@@ -92,6 +117,10 @@ class AwentaFan(AwentaEntity, FanEntity):
         )
 
     async def async_turn_off(self, **kwargs):
+
+        self._optimistic_is_on = False
+        self._optimistic_percentage = 0
+        self.async_write_ha_state()
 
         await self.api.send(
             self.mac,
