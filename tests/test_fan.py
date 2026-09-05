@@ -126,17 +126,17 @@ async def test_fan_turn_on_uses_last_percentage(mock_coordinator, mock_api):
     """Test fan turn_on without percentage uses last saved percentage."""
     fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
     fan.async_write_ha_state = MagicMock()
-    
+
     # First set to 75%
     await fan.async_set_percentage(75)
     mock_api.reset_mock()
-    
-    # Now turn on without percentage - should use last 75%
+
+    # Now turn on without percentage - should use last 75%. The fan is
+    # already (optimistically) on from the call above, so this must NOT
+    # resend power_on - see test_fan_speed_change_while_on_does_not_resend_power_on.
     await fan.async_turn_on()
-    
-    # Check API was called (power on and set gear)
-    assert mock_api.send.call_count == 2
-    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_power_on"})
+
+    assert mock_api.send.call_count == 1
     mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 2})
 
 @pytest.mark.asyncio
@@ -195,6 +195,40 @@ async def test_fan_optimistic_state_cleared_once_device_confirms(mock_coordinato
 
     assert fan.is_on is True
     assert fan.percentage == 33
+
+
+@pytest.mark.asyncio
+async def test_fan_speed_change_while_on_does_not_resend_power_on(mock_coordinator, mock_api):
+    """Regression test: the real device turns itself off when it receives
+    send_power_on while it is already running (observed live: changing from
+    66% to 33% switched the fan off instead of just changing gear). Once the
+    fan is known to be on, changing speed must only send send_gear_number."""
+    mock_coordinator.data["AA:BB:CC:DD:EE:FF"] = {"power": True, "recuperation_gear_adv": 2}
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    fan.async_write_ha_state = MagicMock()
+
+    await fan.async_set_percentage(33)
+
+    mock_api.send.assert_called_once_with(
+        "AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 1}
+    )
+    assert fan.is_on is True
+    assert fan.percentage == 33
+
+
+@pytest.mark.asyncio
+async def test_fan_set_percentage_from_off_still_sends_power_on(mock_coordinator, mock_api):
+    """Companion to the test above: power_on must still be sent when the fan
+    really is off - only the "already on" case should skip it."""
+    mock_coordinator.data["AA:BB:CC:DD:EE:FF"] = {"power": False, "recuperation_gear_adv": 0}
+    fan = AwentaFan(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Fan")
+    fan.async_write_ha_state = MagicMock()
+
+    await fan.async_set_percentage(66)
+
+    assert mock_api.send.call_count == 2
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_power_on"})
+    mock_api.send.assert_any_call("AA:BB:CC:DD:EE:FF", {"act": "send_gear_number", "gear_nr": 2})
 
 
 @pytest.mark.asyncio

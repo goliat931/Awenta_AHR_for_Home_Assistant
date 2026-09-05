@@ -84,27 +84,34 @@ class AwentaFan(AwentaEntity, FanEntity):
         # Zapisujemy prędkość tylko jeśli jest większa od 0
         self._last_percentage = percentage
 
+        # WAŻNE: sprawdzamy to PRZED ustawieniem stanu optymistycznego poniżej,
+        # inaczej zawsze wyszłoby "True" (bo sami je za chwilę tak ustawimy).
+        was_already_on = bool(self.is_on)
+
         # Pokaż od razu żądany stan w HA (patrz komentarz w __init__), zanim
         # jeszcze przyjdzie potwierdzenie z urządzenia.
         self._optimistic_is_on = True
         self._optimistic_percentage = percentage
         self.async_write_ha_state()
 
-        # Zawsze wysyłamy komendę włączenia przy ustawianiu prędkości > 0.
-        # Zapewnia to, że urządzenie ruszy nawet jeśli stan 'power' w HA 
-        # nie zdążył się jeszcze zaktualizować (stale state).
-        await self.api.send(self.mac, {"act": "send_power_on"})
+        # Komendę włączenia wysyłamy TYLKO gdy wentylator faktycznie był
+        # wyłączony. Urządzenie potrafi zareagować na "power on" wysłane do
+        # już pracującego wentylatora restartem/zgaśnięciem zamiast zmiany
+        # biegu - to właśnie powodowało, że np. zmiana z 66% na 33% gasiła
+        # wentylator zamiast zmienić prędkość.
+        if not was_already_on:
+            await self.api.send(self.mac, {"act": "send_power_on"})
 
-        # Jeśli użytkownik ustawiał tryb pracy (select), gdy wentylator był wyłączony,
-        # wysyłamy ten tryb teraz przy uruchamianiu.
-        if self.mac in self.api.last_modes:
-            await self.api.send(
-                self.mac,
-                {
-                    "act": "send_work_mode",
-                    "mode_nr": self.api.last_modes[self.mac],
-                },
-            )
+            # Jeśli użytkownik ustawiał tryb pracy (select), gdy wentylator był
+            # wyłączony, wysyłamy ten tryb teraz przy uruchamianiu.
+            if self.mac in self.api.last_modes:
+                await self.api.send(
+                    self.mac,
+                    {
+                        "act": "send_work_mode",
+                        "mode_nr": self.api.last_modes[self.mac],
+                    },
+                )
 
         gear = max(1, min(3, round(percentage / 33)))
 
