@@ -6,7 +6,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "custom_components"))
 
 from homeassistant.const import UnitOfTemperature, PERCENTAGE
-from awenta_ahr.sensor import AwentaTemperatureSensor, AwentaHumiditySensor, async_setup_entry
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import UnitOfTime
+from awenta_ahr.sensor import (
+    AwentaTemperatureSensor,
+    AwentaHumiditySensor,
+    AwentaFilterTimeLeftSensor,
+    async_setup_entry,
+)
 from awenta_ahr.const import DOMAIN
 
 
@@ -51,7 +58,8 @@ def test_temperature_sensor_properties(mock_coordinator, mock_api):
     """Test initialization properties of the temperature sensor."""
     sensor = AwentaTemperatureSensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
 
-    assert sensor.name == "Test Device Temperature"
+    assert sensor.has_entity_name is True
+    assert sensor.device_class == SensorDeviceClass.TEMPERATURE
     assert sensor.unique_id == "AA:BB:CC:DD:EE:FF_temperature"
     assert sensor.native_unit_of_measurement == UnitOfTemperature.CELSIUS
 
@@ -93,7 +101,8 @@ def test_humidity_sensor_properties(mock_coordinator, mock_api):
     """Test initialization properties of the humidity sensor."""
     sensor = AwentaHumiditySensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
 
-    assert sensor.name == "Test Device Humidity"
+    assert sensor.has_entity_name is True
+    assert sensor.device_class == SensorDeviceClass.HUMIDITY
     assert sensor.unique_id == "AA:BB:CC:DD:EE:FF_humidity"
     assert sensor.native_unit_of_measurement == PERCENTAGE
 
@@ -150,18 +159,19 @@ async def test_async_setup_entry(mock_hass, mock_coordinator, mock_api):
     # Get the list of entities passed to the callback
     entities = async_add_entities.call_args[0][0]
 
-    # Should be 2 entities (1 temp, 1 humidity) per device
-    assert len(entities) == 2
+    # 3 entities per device: temperature, humidity, filter time left
+    assert len(entities) == 3
 
     # Verify the first entity is a Temperature Sensor
     assert isinstance(entities[0], AwentaTemperatureSensor)
-    assert entities[0].name == "Test Device Temperature"
     assert entities[0].unique_id == "AA:BB:CC:DD:EE:FF_temperature"
 
     # Verify the second entity is a Humidity Sensor
     assert isinstance(entities[1], AwentaHumiditySensor)
-    assert entities[1].name == "Test Device Humidity"
     assert entities[1].unique_id == "AA:BB:CC:DD:EE:FF_humidity"
+
+    assert isinstance(entities[2], AwentaFilterTimeLeftSensor)
+    assert entities[2].unique_id == "AA:BB:CC:DD:EE:FF_filter_time_left"
 
 @pytest.mark.asyncio
 async def test_async_setup_entry_multiple_devices(mock_hass, mock_coordinator, mock_api):
@@ -177,17 +187,66 @@ async def test_async_setup_entry_multiple_devices(mock_hass, mock_coordinator, m
 
     entities = async_add_entities.call_args[0][0]
 
-    # Should be 4 entities total (2 per device)
-    assert len(entities) == 4
+    assert len(entities) == 6
 
     # Check that devices have the correct types and properties
     sensor_types = [type(e) for e in entities]
     assert sensor_types == [
         AwentaTemperatureSensor,
         AwentaHumiditySensor,
+        AwentaFilterTimeLeftSensor,
         AwentaTemperatureSensor,
-        AwentaHumiditySensor
+        AwentaHumiditySensor,
+        AwentaFilterTimeLeftSensor,
     ]
 
-    assert entities[2].name == "Second Device Temperature"
-    assert entities[3].name == "Second Device Humidity"
+    assert entities[3].unique_id == "11:22:33:44:55:66_temperature"
+    assert entities[4].unique_id == "11:22:33:44:55:66_humidity"
+
+
+def test_filter_sensor_properties(mock_coordinator, mock_api):
+    sensor = AwentaFilterTimeLeftSensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
+
+    assert sensor.unique_id == "AA:BB:CC:DD:EE:FF_filter_time_left"
+    assert sensor.translation_key == "filter_time_left"
+    assert sensor.device_class == SensorDeviceClass.DURATION
+    assert sensor.native_unit_of_measurement == UnitOfTime.HOURS
+
+
+def test_filter_sensor_value_in_hours(mock_coordinator, mock_api):
+    mock_coordinator.data["AA:BB:CC:DD:EE:FF"]["time_filter_time_left"] = 2160
+    sensor = AwentaFilterTimeLeftSensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
+
+    assert sensor.native_value == 2160
+    assert sensor.extra_state_attributes == {"days_left": 90.0}
+
+
+def test_filter_sensor_never_negative(mock_coordinator, mock_api):
+    mock_coordinator.data["AA:BB:CC:DD:EE:FF"]["time_filter_time_left"] = -5
+    sensor = AwentaFilterTimeLeftSensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
+
+    assert sensor.native_value == 0
+
+
+def test_filter_sensor_missing_value(mock_coordinator, mock_api):
+    sensor = AwentaFilterTimeLeftSensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
+
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes is None
+
+
+def test_entity_unavailable_when_websocket_disconnected(mock_coordinator, mock_api):
+    sensor = AwentaFilterTimeLeftSensor(mock_coordinator, mock_api, "AA:BB:CC:DD:EE:FF", "Test Device")
+
+    mock_api.is_connected.return_value = True
+    assert sensor.available is True
+
+    mock_api.is_connected.return_value = False
+    assert sensor.available is False
+
+
+def test_entity_unavailable_without_any_data(mock_coordinator, mock_api):
+    mock_api.is_connected.return_value = True
+    sensor = AwentaFilterTimeLeftSensor(mock_coordinator, mock_api, "11:22:33:44:55:66", "Other")
+
+    assert sensor.available is False

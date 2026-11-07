@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Awenta HRV",
+        "description": "Zaloguj się danymi z aplikacji Awenta.",
+        "data": {
+          "email": "E-mail",
+          "password": "Hasło"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Ponowne logowanie",
+        "description": "Hasło do konta {email} przestało działać. Podaj aktualne hasło.",
+        "data": {
+          "password": "Hasło"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nieprawidłowy e-mail lub hasło",
+      "cannot_connect": "Nie można połączyć się z serwerem Awenta",
+      "unknown": "Nieoczekiwany błąd"
+    },
+    "abort": {
+      "already_configured": "To konto jest już skonfigurowane",
+      "reauth_successful": "Ponowne logowanie zakończone sukcesem"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "filter_time_left": {
+        "name": "Czas do wymiany filtra"
+      }
+    },
+    "binary_sensor": {
+      "filter_replace": {
+        "name": "Wymiana filtra"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Tryb pracy"
+      }
+    }
+  }
+}

@@ -37,7 +37,8 @@ class AwentaModeSelect(AwentaEntity, SelectEntity):
 
         super().__init__(coordinator, api, mac, name)
 
-        self._attr_name = f"{name} Mode"
+        self._attr_translation_key = "mode"
+        self._attr_icon = "mdi:hvac"
         self._attr_unique_id = f"{mac}_mode"
         self._attr_options = list(MODE_MAP.keys())
 

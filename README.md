@@ -20,16 +20,39 @@ Integracja zapewnia dwukierunkową komunikację z urządzeniem, co pozwala na:
 *   **Wilgotność:** Odczyt poziomu wilgotności powietrza.
 *   **Status danych:** Inteligentne sprawdzanie poprawności danych (`data_valid`) oraz statusu czujników, co zapobiega wyświetlaniu błędnych odczytów (np. 0°C), gdy czujnik jest offline.
 
-### 3. Zarządzanie trybami pracy (Entity: Select)
+### 3. Stan filtra (Entities: Sensor + Binary sensor)
+*   **Czas do wymiany filtra** (`sensor.<urządzenie>_czas_do_wymiany_filtra`): ta sama wartość, którą aplikacja Awenta pokazuje jako stan filtra, w godzinach (np. `2160 h`). Atrybut `days_left` podaje wartość w dniach, a w ustawieniach encji można zmienić jednostkę wyświetlania np. na dni.
+*   **Wymiana filtra** (`binary_sensor.<urządzenie>_wymiana_filtra`, klasa *problem*): włącza się, gdy licznik zejdzie do 0 – to ten sam moment, w którym rekuperator zaczyna mrugać na czerwono.
+
+Przykładowa automatyzacja z powiadomieniem:
+
+```yaml
+automation:
+  - alias: "Rekuperator – wymień filtr"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.rekuperator_wymiana_filtra
+        to: "on"
+    actions:
+      - action: notify.notify
+        data:
+          message: "Czas wymienić filtr w rekuperatorze Awenta."
+```
+
+> Kasowanie licznika po wymianie filtra robi się na urządzeniu / w aplikacji Awenta – komenda resetu nie jest (jeszcze) znana z API, więc integracja jej nie wysyła.
+
+### 4. Zarządzanie trybami pracy (Entity: Select)
 Możliwość szybkiego przełączania między zdefiniowanymi trybami pracy urządzenia:
 *   **Recuperation (Odzysk ciepła):** Standardowy tryb pracy zrównoważonej.
 *   **Supply (Nawiew):** Praca wyłącznie wentylatora nawiewnego.
 *   **Extract (Wywiew):** Praca wyłącznie wentylatora wywiewnego.
 
-### 4. Technologia Cloud-Push
+### 5. Technologia Cloud-Push
 W przeciwieństwie do standardowych integracji opartych na odpytywaniu (polling), to rozwiązanie wykorzystuje:
 *   **REST API:** Do bezpiecznego logowania i autoryzacji sesji.
 *   **WebSocket:** Do natychmiastowego odbierania powiadomień o zmianie stanu urządzenia. Każda zmiana parametrów na panelu fizycznym lub w aplikacji mobilnej jest widoczna w Home Assistant bez opóźnień.
+*   **Dostępność:** gdy połączenie WebSocket z urządzeniem zostanie zerwane, encje przechodzą w stan *niedostępny* zamiast pokazywać nieaktualne dane.
+*   **Obsługa błędów logowania:** złe hasło jest wykrywane już przy dodawaniu integracji, a gdy hasło przestanie działać, Home Assistant poprosi o ponowne zalogowanie (reauth). Chwilowa niedostępność serwera Awenta nie psuje konfiguracji – HA sam ponawia próbę.
 
 ---
 

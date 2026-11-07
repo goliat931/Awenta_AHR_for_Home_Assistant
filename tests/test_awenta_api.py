@@ -180,3 +180,58 @@ async def test_awenta_api_list_devices_empty(mock_hass):
 
         mock_request.assert_called_once_with("list_devices", "{}")
         assert api.devices == []
+
+
+def test_is_connected_defaults_to_false(mock_hass):
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+    assert api.is_connected("AA:BB:CC:DD:EE:FF") is False
+
+
+@pytest.mark.asyncio
+async def test_stop_cancels_tasks_and_closes_sockets(mock_hass):
+    import asyncio
+
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+    task = asyncio.ensure_future(asyncio.sleep(3600))
+    api._tasks.append(task)
+    ws = MagicMock()
+    ws.close = AsyncMock()
+    api.ws["AA:BB:CC:DD:EE:FF"] = ws
+    api._connected.add("AA:BB:CC:DD:EE:FF")
+
+    await api.stop()
+
+    assert task.cancelled()
+    ws.close.assert_awaited_once()
+    assert api.ws == {}
+    assert api.is_connected("AA:BB:CC:DD:EE:FF") is False
+
+
+@pytest.mark.asyncio
+@patch('awenta_ahr.awenta_api.async_get_clientsession')
+async def test_login_failure_raises_auth_error(mock_get_session, mock_hass):
+    from awenta_ahr.awenta_api import AwentaAuthError
+
+    mock_session = MagicMock()
+    mock_session.post.return_value = AsyncContextManagerMock(
+        json.dumps({"success": False, "msg": "bad"})
+    )
+    mock_get_session.return_value = mock_session
+
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+    with pytest.raises(AwentaAuthError):
+        await api.login()
+
+
+@pytest.mark.asyncio
+@patch('awenta_ahr.awenta_api.async_get_clientsession')
+async def test_non_json_response_raises_connection_error(mock_get_session, mock_hass):
+    from awenta_ahr.awenta_api import AwentaConnectionError
+
+    mock_session = MagicMock()
+    mock_session.post.return_value = AsyncContextManagerMock("<html>502</html>")
+    mock_get_session.return_value = mock_session
+
+    api = AwentaAPI(mock_hass, "test@example.com", "password123")
+    with pytest.raises(AwentaConnectionError):
+        await api.login()

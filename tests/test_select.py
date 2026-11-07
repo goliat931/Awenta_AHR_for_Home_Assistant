@@ -99,4 +99,4 @@ async def test_async_setup_entry(mock_hass, mock_entry):
     entities = async_add_entities.call_args[0][0]
     assert len(entities) == 1
     assert isinstance(entities[0], AwentaModeSelect)
-    assert entities[0]._attr_name == "Test Device Mode"
+    assert entities[0].translation_key == "mode"
