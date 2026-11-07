@@ -1,7 +1,9 @@
 import logging
 
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+
 from .const import DOMAIN, PLATFORMS
-from .awenta_api import AwentaAPI
+from .awenta_api import AwentaAPI, AwentaAuthError, AwentaError
 from .coordinator import AwentaCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -16,7 +18,14 @@ async def async_setup_entry(hass, entry):
 
     api = AwentaAPI(hass, email, password)
 
-    await api.start()
+    try:
+        await api.start()
+    except AwentaAuthError as err:
+        # HA pokaże "wymagane ponowne uwierzytelnienie" zamiast cichego błędu.
+        raise ConfigEntryAuthFailed(str(err)) from err
+    except AwentaError as err:
+        # Serwer chwilowo niedostępny -> HA sam ponowi próbę później.
+        raise ConfigEntryNotReady(str(err)) from err
 
     coordinator = AwentaCoordinator(hass, api)
 
@@ -39,6 +48,7 @@ async def async_unload_entry(hass, entry):
     )
 
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        data = hass.data[DOMAIN].pop(entry.entry_id)
+        await data["api"].stop()
 
     return unload_ok

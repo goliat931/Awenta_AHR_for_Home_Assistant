@@ -5,14 +5,26 @@ import logging
 import hashlib
 import urllib.parse
 
+import aiohttp
+
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util.ssl import client_context
-from homeassistant.util.ssl import client_context
-from homeassistant.util.ssl import get_default_context
 
 from .const import API_URL, WS_URL
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class AwentaError(Exception):
+    """Base error of the Awenta cloud API."""
+
+
+class AwentaAuthError(AwentaError):
+    """Wrong e-mail/password or no socket key returned by the server."""
+
+
+class AwentaConnectionError(AwentaError):
+    """Server unreachable or returned something that is not JSON."""
 
 
 class AwentaAPI:
@@ -39,6 +51,9 @@ class AwentaAPI:
         self.last_modes = {}
         self._data_futures = {} # To signal when initial data is received for a MAC
         self._ssl_context = None
+        self._tasks = []
+        self._connected = set()  # MAC-i z aktywnym połączeniem WebSocket
+        self._stopping = False
 
     def register_listener(self, callback):
         self.listeners.append(callback)
@@ -48,10 +63,46 @@ class AwentaAPI:
         await self.login()
         await self.list_devices()
 
+        self._stopping = False
         for device in self.devices:
-            self.hass.async_create_task(
-                self.websocket_loop(device["mac"])
+            self._tasks.append(
+                self.hass.async_create_background_task(
+                    self.websocket_loop(device["mac"]),
+                    f"awenta_ahr websocket {device['mac']}",
+                )
             )
+
+    async def stop(self):
+        """Zamknij wszystkie połączenia WebSocket (przy unload/reload integracji).
+
+        Wcześniej pętle WebSocket działały w nieskończoność także po usunięciu
+        lub przeładowaniu integracji, więc każde przeładowanie dokładało kolejne
+        połączenia do serwera Awenta.
+        """
+        self._stopping = True
+        for task in self._tasks:
+            task.cancel()
+        for ws in list(self.ws.values()):
+            try:
+                await ws.close()
+            except Exception:  # noqa: BLE001
+                pass
+        for task in self._tasks:
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+        self._tasks.clear()
+        self.ws.clear()
+        self._connected.clear()
+
+    def is_connected(self, mac):
+        """Czy mamy aktywne połączenie WebSocket z danym urządzeniem."""
+        return mac in self._connected
+
+    def _notify(self, mac, data):
+        for callback in self.listeners:
+            callback(mac, data)
 
     async def _request(self, action: str, params_str: str = "{}"):
         payload = {
@@ -68,15 +119,21 @@ class AwentaAPI:
         body = f"data={urllib.parse.quote_plus(json_payload)}"
 
         session = async_get_clientsession(self.hass)
-        async with session.post(
-            API_URL,
-            data=body,
-            headers=self.REQUEST_HEADERS,
-        ) as resp:
-            result = await resp.text()
-            _LOGGER.debug("%s response: %s", action, result)
+        try:
+            async with session.post(
+                API_URL,
+                data=body,
+                headers=self.REQUEST_HEADERS,
+            ) as resp:
+                result = await resp.text()
+                _LOGGER.debug("%s response: %s", action, result)
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise AwentaConnectionError(f"Cannot connect to Awenta server: {err}") from err
 
-        return json.loads(result)
+        try:
+            return json.loads(result)
+        except ValueError as err:
+            raise AwentaConnectionError(f"Invalid response from Awenta server: {result!r}") from err
 
     async def login(self):
 
@@ -89,7 +146,7 @@ class AwentaAPI:
         j = await self._request("version", params_str)
 
         if not j.get("success"):
-            raise Exception(f"Login failed: {j.get('msg')}")
+            raise AwentaAuthError(f"Login failed: {j.get('msg')}")
 
         params = j.get("params", {})
         # Mapowanie kluczy z odpowiedzi 'version'
@@ -97,7 +154,7 @@ class AwentaAPI:
         self.key_socket = params.get("key")
 
         if not self.key_socket:
-            raise Exception("No socket key received")
+            raise AwentaAuthError("No socket key received")
 
     async def list_devices(self):
 
@@ -106,7 +163,8 @@ class AwentaAPI:
 
     async def websocket_loop(self, mac):
 
-        while True:
+        while not self._stopping:
+            ws = None
             try:
                 if self._ssl_context is None:
                     self._ssl_context = client_context()
@@ -127,6 +185,7 @@ class AwentaAPI:
                 }
 
                 await ws.send(json.dumps(join))
+                self._connected.add(mac)
 
                 while True:
 
@@ -137,11 +196,31 @@ class AwentaAPI:
                     if mac in self._data_futures and not self._data_futures[mac].done():
                         self._data_futures[mac].set_result(data)
 
-                    for callback in self.listeners:
-                        callback(mac, data)
+                    if not isinstance(data, dict):
+                        continue
 
+                    self._notify(mac, data)
+
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
-                _LOGGER.error("Error in websocket loop for %s: %s", mac, e)
+                if self._stopping:
+                    break
+                _LOGGER.warning("Error in websocket loop for %s: %s", mac, e)
+            finally:
+                was_connected = mac in self._connected
+                self._connected.discard(mac)
+                self.ws.pop(mac, None)
+                if ws is not None:
+                    try:
+                        await ws.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                if was_connected and not self._stopping:
+                    # Pusta aktualizacja -> encje przeliczą "available".
+                    self._notify(mac, {})
+
+            if not self._stopping:
                 await asyncio.sleep(5)
 
     async def send(self, mac, payload):

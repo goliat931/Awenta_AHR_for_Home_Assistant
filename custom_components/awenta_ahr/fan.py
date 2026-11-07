@@ -28,7 +28,8 @@ class AwentaFan(AwentaEntity, FanEntity):
 
         super().__init__(coordinator, api, mac, name)
 
-        self._attr_name = name
+        # Główna encja urządzenia -> przyjmuje samą nazwę urządzenia.
+        self._attr_name = None
         self._attr_unique_id = f"{mac}_fan"
         self._attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
         self._last_percentage = 33 # Domyślna prędkość startowa (Bieg 1)

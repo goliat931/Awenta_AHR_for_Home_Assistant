@@ -3,15 +3,45 @@
     "step": {
       "user": {
         "title": "Awenta HRV",
+        "description": "Sign in with your Awenta app account.",
         "data": {
           "email": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "The password for {email} no longer works. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
-    "error": {},
+    "error": {
+      "invalid_auth": "Invalid email or password",
+      "cannot_connect": "Cannot connect to the Awenta server",
+      "unknown": "Unexpected error"
+    },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "This account is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "filter_time_left": {
+        "name": "Filter time left"
+      }
+    },
+    "binary_sensor": {
+      "filter_replace": {
+        "name": "Filter replacement"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Mode"
+      }
     }
   }
 }

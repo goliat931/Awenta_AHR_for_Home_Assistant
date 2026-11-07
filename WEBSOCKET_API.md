@@ -185,7 +185,7 @@ Serwer wysyła wiadomości JSON zawierające stan urządzenia.
 | `night_en` | boolean | Czy tryb nocny włączony |
 | `sync_recuperation_adv` | boolean | Synchronizacja regeneracji (zaawansowana) |
 | `sync_recuperation_master` | boolean | Synchronizacja regeneracji (główna) |
-| `time_filter_time_left` | integer | Czas pozostały do wymiany filtru (godziny) |
+| `time_filter_time_left` | integer | Czas pozostały do wymiany filtru (godziny). Zgodne z wartością w aplikacji (np. 2160 h = 90 dni). Przy 0 urządzenie mruga na czerwono. Wystawiane w HA jako sensor + binary_sensor. |
 | `timer_left` | integer | Czas pozostały timera (sekundy) |
 
 ## Obsługa zdarzeń WebSocket
